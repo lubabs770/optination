@@ -22,7 +22,7 @@ impl Bitmap {
     /// but draws nothing, usually a placeholder the theme never filled in. It
     /// has to be treated as absent, or the UI shows an unexplained hole.
     pub fn is_blank(&self) -> bool {
-        self.rgba.chunks_exact(4).all(|px| px[3] == 0)
+        self.rgba.as_chunks::<4>().0.iter().all(|px| px[3] == 0)
     }
 }
 
@@ -50,7 +50,7 @@ pub const SLOTS: &[Slot] = &[
 /// so neither field is actually RGBA. Swap R and B ourselves.
 fn bgra_to_rgba(src: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(src.len());
-    for px in src.chunks_exact(4) {
+    for px in src.as_chunks::<4>().0 {
         out.extend_from_slice(&[px[2], px[1], px[0], px[3]]);
     }
     out
@@ -185,10 +185,10 @@ fn decode_png(data: &[u8]) -> Option<Bitmap> {
     let rgba = match (info.color_type, info.bit_depth) {
         (png::ColorType::Rgba, png::BitDepth::Eight) => buf,
         (png::ColorType::Rgb, png::BitDepth::Eight) => {
-            buf.chunks_exact(3).flat_map(|p| [p[0], p[1], p[2], 255]).collect()
+            buf.as_chunks::<3>().0.iter().flat_map(|p| [p[0], p[1], p[2], 255]).collect()
         }
         (png::ColorType::GrayscaleAlpha, png::BitDepth::Eight) => {
-            buf.chunks_exact(2).flat_map(|p| [p[0], p[0], p[0], p[1]]).collect()
+            buf.as_chunks::<2>().0.iter().flat_map(|p| [p[0], p[0], p[0], p[1]]).collect()
         }
         (png::ColorType::Grayscale, png::BitDepth::Eight) => {
             buf.iter().flat_map(|&g| [g, g, g, 255]).collect()
@@ -225,10 +225,11 @@ pub fn shape(theme: &Theme, slot: &Slot, target: u32) -> Option<Bitmap> {
     if theme.format.has_hypr() {
         bitmap = load_hyprcursor(&theme.path, slot.names, target);
     }
-    if bitmap.as_ref().is_none_or(Bitmap::is_blank) && theme.format.has_x11() {
-        if let Some(fallback) = load_xcursor(&theme.path, slot.names, target) {
-            bitmap = Some(fallback);
-        }
+    if bitmap.as_ref().is_none_or(Bitmap::is_blank)
+        && theme.format.has_x11()
+        && let Some(fallback) = load_xcursor(&theme.path, slot.names, target)
+    {
+        bitmap = Some(fallback);
     }
     bitmap.filter(|b| !b.is_blank())
 }
