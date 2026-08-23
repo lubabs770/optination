@@ -9,6 +9,7 @@ import {
     Slider,
     SegmentedButton,
     FilterChip,
+    Switch,
     FilledButton,
     OutlineButton,
     ListView,
@@ -200,7 +201,7 @@ export component AppWindow inherits MaterialWindow {
     title: "optination — cursor themes";
     preferred-width: 1240px;
     preferred-height: 880px;
-    min-width: 980px;
+    min-width: 900px;
     min-height: 560px;
 
     in property <[ThemeCard]> cards;
@@ -237,9 +238,9 @@ export component AppWindow inherits MaterialWindow {
     callback filters-changed();
 
     property <color> backdrop:
-        backdrop-mode == 0 ? #1b1b1f :
-        backdrop-mode == 1 ? #f6f6fa : #8a8d94;
-    property <color> backdrop-ink: backdrop-mode == 1 ? #1b1b1f : #f6f6fa;
+        backdrop-mode == 0 ? #121215 :
+        backdrop-mode == 1 ? #fbfbfd : #8a8d94;
+    property <color> backdrop-ink: backdrop-mode == 1 ? #121215 : #fbfbfd;
 
     // Cursors are drawn 1:1, so the cell must hold the largest offered size.
     property <length> box: 64px;
@@ -260,7 +261,6 @@ export component AppWindow inherits MaterialWindow {
             height: 56px;
 
             VerticalLayout {
-                width: 268px;
                 alignment: center;
                 MaterialText {
                     text: "optination";
@@ -270,7 +270,7 @@ export component AppWindow inherits MaterialWindow {
             }
 
             VerticalLayout {
-                width: 260px;
+                width: 220px;
                 alignment: center;
                 TextField {
                     label: "filter";
@@ -282,7 +282,7 @@ export component AppWindow inherits MaterialWindow {
 
             HorizontalLayout {
                 spacing: 10px;
-                width: 300px;
+                width: 230px;
                 VerticalLayout {
                     alignment: center;
                     MaterialText {
@@ -306,31 +306,31 @@ export component AppWindow inherits MaterialWindow {
 
             VerticalLayout {
                 alignment: center;
-                HorizontalLayout {
-                    spacing: 8px;
-                    VerticalLayout {
-                        alignment: center;
-                        MaterialText {
-                            text: "backdrop";
-                            style: MaterialTypography.label-medium;
-                            color: MaterialPalette.on-surface-variant;
-                        }
-                    }
-                    SegmentedButton {
-                        items: [{ text: "dark" }, { text: "light" }, { text: "mid" }];
-                        current-index <=> root.backdrop-mode;
-                    }
+                SegmentedButton {
+                    items: [{ text: "dark" }, { text: "light" }, { text: "mid" }];
+                    current-index <=> root.backdrop-mode;
                 }
             }
 
-            VerticalLayout {
-                alignment: center;
-                SegmentedButton {
-                    items: [{ text: "app dark" }, { text: "app light" }];
-                    current-index: root.dark-mode ? 0 : 1;
-                    index-changed(i) => {
-                        root.dark-mode = i == 0;
-                        root.apply-scheme();
+            // App theme, distinct from the preview backdrop above it.
+            HorizontalLayout {
+                spacing: 8px;
+                VerticalLayout {
+                    alignment: center;
+                    Switch {
+                        checked <=> root.dark-mode;
+                        tooltip: "dark app theme";
+                        // `checked` is already two-way bound to dark-mode; this
+                        // only has to push the change into the palette.
+                        checked-state-changed(on) => { root.apply-scheme(); }
+                    }
+                }
+                VerticalLayout {
+                    alignment: center;
+                    MaterialText {
+                        text: root.dark-mode ? "dark" : "light";
+                        style: MaterialTypography.label-large;
+                        color: MaterialPalette.on-surface-variant;
                     }
                 }
             }
