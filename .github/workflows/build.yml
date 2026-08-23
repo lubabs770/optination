@@ -13,7 +13,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Slint's winit backend links fontconfig at build time; the rest of the
       # Wayland/X11 stack is loaded at runtime, but the -dev packages keep
