@@ -1,0 +1,52 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Slint's winit backend links fontconfig at build time; the rest of the
+      # Wayland/X11 stack is loaded at runtime, but the -dev packages keep
+      # pkg-config from failing the build.
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libfontconfig1-dev libxkbcommon-dev libwayland-dev \
+            libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Check
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Build
+        run: cargo build --release --locked
+
+      - name: Smoke test the CLI
+        run: |
+          ./target/release/optination --help
+          ./target/release/optination --version
+          # No cursor themes are installed on the runner, so --list must exit
+          # cleanly with nothing rather than erroring.
+          ./target/release/optination --list
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: optination-linux-x86_64
+          path: target/release/optination
+          if-no-files-found: error

@@ -1,0 +1,483 @@
+import { Palette, ColorScheme } from "std-widgets.slint";
+import {
+    MaterialWindow,
+    MaterialPalette,
+    MaterialTypography,
+    MaterialAnimations,
+    MaterialText,
+    TextField,
+    Slider,
+    SegmentedButton,
+    SegmentedItem,
+    FilterChip,
+    FilledButton,
+    OutlineButton,
+    ListView,
+} from "@material";
+
+export struct ThemeCard {
+    name: string,
+    comment: string,
+    badge: string,
+    shapes: int,
+    user-installed: bool,
+    mirrored: bool,
+    tone: string,
+    // Six preview slots, in the order of render::SLOTS. Flat fields rather than
+    // an array so each cell can be laid out and labelled independently.
+    p0: image,
+    p1: image,
+    p2: image,
+    p3: image,
+    p4: image,
+    p5: image,
+    // Whether each slot produced anything. A theme that simply does not define
+    // a `wait` shape is a fact worth showing, not an unexplained hole.
+    h0: bool,
+    h1: bool,
+    h2: bool,
+    h3: bool,
+    h4: bool,
+    h5: bool,
+}
+
+component Tag inherits Rectangle {
+    in property <string> text;
+    in property <color> tint: MaterialPalette.on-surface-variant;
+
+    background: tint.with-alpha(0.14);
+    border-radius: 4px;
+    height: 20px;
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        MaterialText {
+            text: root.text;
+            style: MaterialTypography.label-small;
+            color: tint;
+            vertical-alignment: center;
+        }
+    }
+}
+
+component PreviewCell inherits Rectangle {
+    in property <image> source;
+    in property <bool> present;
+    in property <string> label;
+    in property <length> box;
+    in property <color> ink;
+
+    width: box + 12px;
+    VerticalLayout {
+        spacing: 4px;
+        alignment: center;
+
+        Rectangle {
+            height: root.box;
+            // Drawn at true pixel size: the preview is the cursor itself, not
+            // an approximation of it.
+            if root.present: Image {
+                source: root.source;
+                image-fit: contain;
+                image-rendering: smooth;
+                width: 100%;
+                height: 100%;
+            }
+            // An explicit "this theme does not define this shape" mark. Without
+            // it a gap reads as a rendering bug.
+            if !root.present: Rectangle {
+                width: 14px;
+                height: 2px;
+                border-radius: 1px;
+                background: root.ink.with-alpha(0.35);
+            }
+        }
+
+        MaterialText {
+            text: root.label;
+            style: MaterialTypography.label-small;
+            color: root.ink.with-alpha(root.present ? 0.6 : 0.35);
+            horizontal-alignment: center;
+        }
+    }
+}
+
+component ThemeRow inherits Rectangle {
+    in property <ThemeCard> card;
+    in property <bool> selected;
+    in property <bool> is-current;
+    in property <color> backdrop;
+    in property <color> backdrop-ink;
+    in property <length> box;
+    in property <[string]> labels;
+    callback clicked;
+
+    height: root.box + 66px;
+    border-radius: 12px;
+    border-width: selected ? 2px : 1px;
+    border-color: selected ? MaterialPalette.primary : MaterialPalette.outline-variant;
+    background: selected ? MaterialPalette.secondary-container
+        : touch.has-hover ? MaterialPalette.surface-container-high
+        : MaterialPalette.surface-container-low;
+    animate background, border-color {
+        duration: MaterialAnimations.standard-accelerate-duration;
+        easing: MaterialAnimations.standard-easing;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+
+    HorizontalLayout {
+        padding: 14px;
+        spacing: 16px;
+
+        VerticalLayout {
+            width: 268px;
+            spacing: 6px;
+            alignment: center;
+
+            HorizontalLayout {
+                spacing: 6px;
+                alignment: start;
+                MaterialText {
+                    text: root.card.name;
+                    style: MaterialTypography.title-small;
+                    color: root.selected ? MaterialPalette.on-secondary-container
+                        : MaterialPalette.on-surface;
+                    overflow: elide;
+                }
+                if root.is-current: Tag { text: "in use"; tint: MaterialPalette.tertiary; }
+            }
+
+            HorizontalLayout {
+                spacing: 6px;
+                alignment: start;
+                Tag {
+                    text: root.card.badge;
+                    tint: root.card.badge == "hypr" ? MaterialPalette.primary
+                        : MaterialPalette.on-surface-variant;
+                }
+                Tag { text: root.card.shapes + " shapes"; }
+                if root.card.tone != "": Tag { text: root.card.tone; }
+                if root.card.mirrored: Tag { text: "mirrored"; }
+                if root.card.user-installed: Tag { text: "~/"; tint: MaterialPalette.secondary; }
+            }
+
+            if root.card.comment != "": MaterialText {
+                text: root.card.comment;
+                style: MaterialTypography.body-small;
+                color: MaterialPalette.on-surface-variant;
+                overflow: elide;
+                wrap: no-wrap;
+            }
+        }
+
+        // Preview strip. Its backdrop is controlled separately from the app
+        // theme, because a white cursor on a dark panel and a black one on a
+        // light panel are equally invisible.
+        Rectangle {
+            background: root.backdrop;
+            border-radius: 8px;
+            border-width: 1px;
+            border-color: MaterialPalette.outline-variant;
+            HorizontalLayout {
+                padding: 8px;
+                spacing: 2px;
+                alignment: start;
+                PreviewCell { source: root.card.p0; present: root.card.h0; label: root.labels[0]; box: root.box; ink: root.backdrop-ink; }
+                PreviewCell { source: root.card.p1; present: root.card.h1; label: root.labels[1]; box: root.box; ink: root.backdrop-ink; }
+                PreviewCell { source: root.card.p2; present: root.card.h2; label: root.labels[2]; box: root.box; ink: root.backdrop-ink; }
+                PreviewCell { source: root.card.p3; present: root.card.h3; label: root.labels[3]; box: root.box; ink: root.backdrop-ink; }
+                PreviewCell { source: root.card.p4; present: root.card.h4; label: root.labels[4]; box: root.box; ink: root.backdrop-ink; }
+                PreviewCell { source: root.card.p5; present: root.card.h5; label: root.labels[5]; box: root.box; ink: root.backdrop-ink; }
+            }
+        }
+    }
+}
+
+export component AppWindow inherits MaterialWindow {
+    title: "optination — cursor themes";
+    preferred-width: 1240px;
+    preferred-height: 880px;
+    min-width: 980px;
+    min-height: 560px;
+
+    in property <[ThemeCard]> cards;
+    in property <[string]> slot-labels;
+    in property <string> current-theme;
+    in property <int> total;
+    in property <string> status;
+    in property <bool> status-is-error;
+    in property <string> stale-conf;
+    in property <bool> can-revert;
+
+    in-out property <int> selected: -1;
+    in-out property <float> size: 32;
+    in-out property <string> filter;
+    in-out property <int> backdrop-mode: 0;
+    in-out property <bool> dark-mode: true;
+
+    // Filter chips. Within a group the active chips are OR-ed; across groups
+    // they are AND-ed, so "hyprcursor + dark" narrows rather than empties.
+    in-out property <bool> f-x11;
+    in-out property <bool> f-hypr;
+    in-out property <bool> f-light;
+    in-out property <bool> f-dark;
+    in-out property <bool> f-standard;
+    in-out property <bool> f-mirrored;
+    in-out property <bool> f-system;
+    in-out property <bool> f-user;
+
+    callback apply-live(int, int);
+    callback persist(int, int);
+    callback revert();
+    callback size-changed(int);
+    callback filter-changed(string);
+    callback filters-changed();
+
+    property <color> backdrop:
+        backdrop-mode == 0 ? #1b1b1f :
+        backdrop-mode == 1 ? #f6f6fa : #8a8d94;
+    property <color> backdrop-ink: backdrop-mode == 1 ? #1b1b1f : #f6f6fa;
+
+    // Cursors are drawn 1:1, so the cell must hold the largest offered size.
+    property <length> box: 64px;
+
+    function apply-scheme() {
+        Palette.color-scheme = root.dark-mode ? ColorScheme.dark : ColorScheme.light;
+    }
+
+    init => { root.apply-scheme(); }
+
+    VerticalLayout {
+        padding: 16px;
+        spacing: 12px;
+
+        // ------------------------------------------------------- toolbar ---
+        HorizontalLayout {
+            spacing: 16px;
+            height: 56px;
+
+            VerticalLayout {
+                width: 268px;
+                alignment: center;
+                MaterialText {
+                    text: "optination";
+                    style: MaterialTypography.headline-small;
+                    color: MaterialPalette.on-surface;
+                }
+            }
+
+            VerticalLayout {
+                width: 260px;
+                alignment: center;
+                TextField {
+                    label: "filter";
+                    placeholder-text: "name, comment or format";
+                    text <=> root.filter;
+                    edited(text) => { root.filter-changed(text); }
+                }
+            }
+
+            HorizontalLayout {
+                spacing: 10px;
+                width: 300px;
+                VerticalLayout {
+                    alignment: center;
+                    MaterialText {
+                        text: "size " + Math.round(root.size) + "px";
+                        style: MaterialTypography.label-large;
+                        color: MaterialPalette.on-surface-variant;
+                    }
+                }
+                VerticalLayout {
+                    alignment: center;
+                    Slider {
+                        minimum: 16;
+                        maximum: 64;
+                        value <=> root.size;
+                        released(v) => { root.size-changed(Math.round(v)); }
+                    }
+                }
+            }
+
+            Rectangle { }
+
+            VerticalLayout {
+                alignment: center;
+                HorizontalLayout {
+                    spacing: 8px;
+                    VerticalLayout {
+                        alignment: center;
+                        MaterialText {
+                            text: "backdrop";
+                            style: MaterialTypography.label-medium;
+                            color: MaterialPalette.on-surface-variant;
+                        }
+                    }
+                    SegmentedButton {
+                        items: [{ text: "dark" }, { text: "light" }, { text: "mid" }];
+                        current-index <=> root.backdrop-mode;
+                    }
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+                SegmentedButton {
+                    items: [{ text: "app dark" }, { text: "app light" }];
+                    current-index: root.dark-mode ? 0 : 1;
+                    index-changed(i) => {
+                        root.dark-mode = i == 0;
+                        root.apply-scheme();
+                    }
+                }
+            }
+        }
+
+        // --------------------------------------------------------- chips ---
+        HorizontalLayout {
+            spacing: 8px;
+            height: 34px;
+            alignment: start;
+
+            FilterChip {
+                text: "X11";
+                checked <=> root.f-x11;
+                changed checked => { root.filters-changed(); }
+            }
+            FilterChip {
+                text: "hyprcursor";
+                checked <=> root.f-hypr;
+                changed checked => { root.filters-changed(); }
+            }
+
+            Rectangle { width: 10px; }
+
+            FilterChip {
+                text: "light";
+                checked <=> root.f-light;
+                changed checked => { root.filters-changed(); }
+            }
+            FilterChip {
+                text: "dark";
+                checked <=> root.f-dark;
+                changed checked => { root.filters-changed(); }
+            }
+
+            Rectangle { width: 10px; }
+
+            FilterChip {
+                text: "standard";
+                checked <=> root.f-standard;
+                changed checked => { root.filters-changed(); }
+            }
+            FilterChip {
+                text: "mirrored";
+                checked <=> root.f-mirrored;
+                changed checked => { root.filters-changed(); }
+            }
+
+            Rectangle { width: 10px; }
+
+            FilterChip {
+                text: "system";
+                checked <=> root.f-system;
+                changed checked => { root.filters-changed(); }
+            }
+            FilterChip {
+                text: "user";
+                checked <=> root.f-user;
+                changed checked => { root.filters-changed(); }
+            }
+
+            Rectangle { }
+
+            VerticalLayout {
+                alignment: center;
+                MaterialText {
+                    text: root.cards.length + " / " + root.total + " themes";
+                    style: MaterialTypography.label-large;
+                    color: MaterialPalette.on-surface-variant;
+                }
+            }
+        }
+
+        // ---------------------------------------------------------- list ---
+        ListView {
+            for card[i] in root.cards: VerticalLayout {
+                padding-bottom: 8px;
+                ThemeRow {
+                    card: card;
+                    selected: root.selected == i;
+                    is-current: card.name == root.current-theme;
+                    backdrop: root.backdrop;
+                    backdrop-ink: root.backdrop-ink;
+                    box: root.box;
+                    labels: root.slot-labels;
+                    clicked => {
+                        root.selected = i;
+                        // Applying on click is the point: the real pointer
+                        // changes under your hand before you commit.
+                        root.apply-live(i, Math.round(root.size));
+                    }
+                }
+            }
+        }
+
+        if root.stale-conf != "": Rectangle {
+            height: 34px;
+            border-radius: 8px;
+            background: MaterialPalette.tertiary-container;
+            HorizontalLayout {
+                padding-left: 12px;
+                padding-right: 12px;
+                MaterialText {
+                    vertical-alignment: center;
+                    style: MaterialTypography.body-small;
+                    color: MaterialPalette.on-tertiary-container;
+                    text: "stale env = XCURSOR_* lines still in " + root.stale-conf + " — inert since the Lua port, safe to delete";
+                }
+            }
+        }
+
+        // -------------------------------------------------------- footer ---
+        HorizontalLayout {
+            height: 44px;
+            spacing: 12px;
+
+            VerticalLayout {
+                alignment: center;
+                MaterialText {
+                    text: root.status;
+                    style: MaterialTypography.body-medium;
+                    color: root.status-is-error ? MaterialPalette.error
+                        : MaterialPalette.on-surface-variant;
+                    overflow: elide;
+                }
+            }
+
+            Rectangle { }
+
+            OutlineButton {
+                text: "Revert";
+                enabled: root.can-revert;
+                clicked => { root.revert(); }
+            }
+
+            OutlineButton {
+                text: "Apply now";
+                enabled: root.selected >= 0;
+                clicked => { root.apply-live(root.selected, Math.round(root.size)); }
+            }
+
+            FilledButton {
+                text: "Save permanently";
+                enabled: root.selected >= 0;
+                clicked => { root.persist(root.selected, Math.round(root.size)); }
+            }
+        }
+    }
+}
