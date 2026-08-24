@@ -206,8 +206,11 @@ fn show_preview(ui: &AppWindow, theme: &scan::Theme, size: i32) {
     ui.set_command(format!("hyprctl setcursor {} {size}", theme.name).into());
 }
 
-fn even(size: i32) -> i32 {
-    (size.clamp(SIZE_MIN, SIZE_MAX) / 2) * 2
+/// The slider snaps to even values and the tick buttons jump, so this only has
+/// to keep a size in range — the +/- buttons step one pixel at a time and must
+/// be able to land on an odd one.
+fn clamp_size(size: i32) -> i32 {
+    size.clamp(SIZE_MIN, SIZE_MAX)
 }
 
 fn main() -> Result<(), slint::PlatformError> {
@@ -224,7 +227,7 @@ fn main() -> Result<(), slint::PlatformError> {
     }
 
     let (current_theme, current_size) = apply::current();
-    let initial_size = even(current_size.map_or(24, |s| s as i32));
+    let initial_size = clamp_size(current_size.map_or(24, |s| s as i32));
 
     // Captured before anything is applied: clicking a row changes the live
     // pointer immediately, which is the whole point, so there has to be a way
@@ -341,7 +344,7 @@ fn main() -> Result<(), slint::PlatformError> {
         move |row: i32| {
             let ui = ui.unwrap();
             let Some(theme) = theme_at(row) else { return };
-            let size = even(ui.get_size().round() as i32);
+            let size = clamp_size(ui.get_size().round() as i32);
             show_preview(&ui, &theme, size);
             // Applying on click is the point: the real pointer changes under
             // your hand before you commit.
@@ -365,7 +368,7 @@ fn main() -> Result<(), slint::PlatformError> {
         let theme_at = theme_at.clone();
         move |raw: i32| {
             let ui = ui.unwrap();
-            let size = even(raw);
+            let size = clamp_size(raw);
             ui.set_size(size as f32);
             let Some(theme) = theme_at(ui.get_selected()) else { return };
             show_preview(&ui, &theme, size);
@@ -382,7 +385,7 @@ fn main() -> Result<(), slint::PlatformError> {
         move || {
             let ui = ui.unwrap();
             let Some(theme) = theme_at(ui.get_selected()) else { return };
-            let size = even(ui.get_size().round() as i32) as u32;
+            let size = clamp_size(ui.get_size().round() as i32) as u32;
             let _ = apply::live(&theme.name, size);
             let _ = apply::session(&theme.name, size);
             match apply::persist(&theme.name, size) {
@@ -415,7 +418,7 @@ fn main() -> Result<(), slint::PlatformError> {
             let size = original.1.unwrap_or(24);
             match apply::live(&name, size).and_then(|()| apply::session(&name, size)) {
                 Ok(()) => {
-                    ui.set_size(even(size as i32) as f32);
+                    ui.set_size(clamp_size(size as i32) as f32);
                     // Put the selection back on the reverted theme, which may
                     // be filtered out of the visible list right now.
                     ui.set_filter(SharedString::new());
@@ -428,7 +431,7 @@ fn main() -> Result<(), slint::PlatformError> {
                     {
                         ui.set_selected(row);
                         if let Some(theme) = theme_at(row) {
-                            show_preview(&ui, &theme, even(size as i32));
+                            show_preview(&ui, &theme, clamp_size(size as i32));
                         }
                     }
                     ui.set_status_is_error(false);

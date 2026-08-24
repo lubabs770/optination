@@ -25,8 +25,11 @@ transparent-cornered surface the tiler had to work around.
   shape count, tone and handedness.
 - **Right pane** — the live preview (pointer at 1.9× the chosen size, the other
   five shapes at 1.25×, on the accent's lightest tone under a dot grid), the size
-  slider with tick buttons at 16/24/32/48/64/96, the resolved `hyprctl setcursor`
-  line, and Reset / Apply.
+  slider flanked by one-pixel step buttons, tick buttons at 16/24/32/48/64/96,
+  the resolved `hyprctl setcursor` line, and Reset / Apply.
+
+The slider snaps to even sizes and the ticks jump; the `-` and `+` buttons move a
+single pixel at a time, so an odd size is reachable.
 
 There is one light/dark system, the app's own. The preview surface follows it
 along with everything else.
