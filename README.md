@@ -8,6 +8,10 @@ theme on the system with its actual pointer, I-beam, hand, resize, busy and
 no-drop shapes rendered at the size you are about to use, applies your pick to
 the live pointer the moment you click it, and only writes to disk when you say so.
 
+| Light | Dark, with the accent menu open |
+|---|---|
+| ![optination in light mode](docs/light.png) | ![optination in dark mode](docs/dark.png) |
+
 Built with [Slint](https://slint.dev) and the
 [material component library](https://github.com/slint-ui/material-rust-template),
 vendored under `material-1.0/`, to a Material 3 design handoff.
