@@ -10,8 +10,37 @@ the live pointer the moment you click it, and only writes to disk when you say s
 
 Built with [Slint](https://slint.dev) and the
 [material component library](https://github.com/slint-ui/material-rust-template),
-vendored under `material-1.0/`. The whole window follows the Material palette, so
-the light/dark switch retones the entire app rather than one panel of it.
+vendored under `material-1.0/`, to a Material 3 design handoff.
+
+## Layout
+
+A frameless window with its own title bar over two panes.
+
+- **Title bar** — app mark, `Cursor / Appearance · Pointer`, then the accent
+  menu, the light/dark toggle, and minimise / maximise / close.
+- **Left pane** — search field, filter chips, and one row per theme: the theme's
+  own pointer rasterized into a 44px tile, its name, and a meta line of format,
+  shape count, tone and handedness.
+- **Right pane** — the live preview (pointer at 1.9× the chosen size, the other
+  five shapes at 1.25×, over a dot grid), the size slider with tick buttons at
+  16/24/32/48/64/96, the resolved `hyprctl setcursor` line, and Reset / Apply.
+
+Only the selected theme is rendered at full size, and the row thumbnails are
+rendered once at a fixed size, so moving the slider re-renders one theme rather
+than all sixty-nine.
+
+## Accents
+
+Six M3 tonal accents — Cyan, Purple, Green, Amber, Rose, Indigo — each with a
+light and a dark scheme. Picking one rebuilds the whole `MaterialPalette` scheme,
+not just the parts this app paints, so the vendored slider, switch and buttons
+re-tone with it.
+
+**Follow Omarchy theme** reads `accent` and `mode` from
+`~/.local/state/omarchy/current/theme/colors.toml` and snaps to the nearest of
+the six. It is a nearest-match, not a generated palette: Omarchy gives one accent
+hex, and deriving a full M3 tonal scheme from it would need a tonal-palette
+generator this app does not ship.
 
 ## Why
 
@@ -56,9 +85,9 @@ Tone and handedness are read off the theme *name*, which is the only place the
 information is recorded — a theme that declares neither stays untagged rather than
 being guessed at from its pixels.
 
-The preview backdrop (dark / light / mid) is a separate control from the app
-theme, because a white cursor on a dark panel and a black one on a light panel are
-equally invisible, whichever way the app itself is themed.
+The preview backdrop (dark / light / mid, top-right of the preview) is a separate
+control from the app theme, because a white cursor on a dark panel and a black one
+on a light panel are equally invisible, whichever way the app itself is themed.
 
 ## Missing shapes
 
@@ -87,7 +116,7 @@ Three consumers need telling, and none of them covers the others:
 | `hl.env("XCURSOR_THEME", …)` in `~/.config/hypr/looknfeel.lua` | every client's environment | permanent |
 
 Clicking a theme does the first two, so the pointer under your hand changes while
-you browse. **Save permanently** adds the third, writing a marked block:
+you browse. **Apply** adds the third, writing a marked block:
 
 ```lua
 -- >>> optination (managed block) >>>
@@ -105,8 +134,8 @@ rather than fought with. After writing, `hyprctl reload` and
 `hyprctl configerrors` run, and a config error is reported instead of waiting to
 bite at next login.
 
-**Revert** puts back whatever was set when the app opened, so trying things on
-live is free.
+**Reset** puts back whatever was set when the app opened, so trying things on live
+is free.
 
 ## CLI
 
