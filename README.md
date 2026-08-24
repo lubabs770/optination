@@ -14,16 +14,22 @@ vendored under `material-1.0/`, to a Material 3 design handoff.
 
 ## Layout
 
-A frameless window with its own title bar over two panes.
+A title bar over two panes. The window keeps its normal frame: Hyprland already
+draws the rounding and the shadow, and painting our own left a
+transparent-cornered surface the tiler had to work around.
 
 - **Title bar** — app mark, `Cursor / Appearance · Pointer`, then the accent
-  menu, the light/dark toggle, and minimise / maximise / close.
+  menu and the light/dark toggle in the top-right corner.
 - **Left pane** — search field, filter chips, and one row per theme: the theme's
   own pointer rasterized into a 44px tile, its name, and a meta line of format,
   shape count, tone and handedness.
 - **Right pane** — the live preview (pointer at 1.9× the chosen size, the other
-  five shapes at 1.25×, over a dot grid), the size slider with tick buttons at
-  16/24/32/48/64/96, the resolved `hyprctl setcursor` line, and Reset / Apply.
+  five shapes at 1.25×, on the accent's lightest tone under a dot grid), the size
+  slider with tick buttons at 16/24/32/48/64/96, the resolved `hyprctl setcursor`
+  line, and Reset / Apply.
+
+There is one light/dark system, the app's own. The preview surface follows it
+along with everything else.
 
 Only the selected theme is rendered at full size, and the row thumbnails are
 rendered once at a fixed size, so moving the slider re-renders one theme rather
@@ -84,10 +90,6 @@ nothing checked places no constraint.
 Tone and handedness are read off the theme *name*, which is the only place the
 information is recorded — a theme that declares neither stays untagged rather than
 being guessed at from its pixels.
-
-The preview backdrop (dark / light / mid, top-right of the preview) is a separate
-control from the app theme, because a white cursor on a dark panel and a black one
-on a light panel are equally invisible, whichever way the app itself is themed.
 
 ## Missing shapes
 
@@ -170,8 +172,6 @@ No system libraries beyond Wayland and a GPU driver. Xcursor parsing via
 
 ## Notes
 
-- Preview backdrop switches between dark, light and mid grey, because a white
-  cursor on a dark panel and a black one on a light panel are equally invisible.
 - Cursors are drawn at their true pixel size — the preview is the thing itself,
   not an approximation of it.
 - For themes shipping both formats, the hyprcursor version is previewed, since

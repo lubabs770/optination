@@ -51,35 +51,6 @@ component IconButton inherits Rectangle {
     }
 }
 
-component WindowButton inherits Rectangle {
-    in property <image> icon;
-    in property <bool> danger;
-    in property <string> tip;
-    callback clicked;
-
-    width: 32px;
-    height: 32px;
-    border-radius: 16px;
-    background: danger ? Skin.error-container : Skin.state-layer;
-    opacity: touch.has-hover ? 1.0 : 0.85;
-
-    accessible-role: button;
-    accessible-label: tip;
-    accessible-action-default => { root.clicked(); }
-
-    Image {
-        source: root.icon;
-        width: 14px;
-        height: 14px;
-        colorize: root.danger ? Skin.on-error-container : Skin.on-surface;
-    }
-
-    touch := TouchArea {
-        mouse-cursor: pointer;
-        clicked => { root.clicked(); }
-    }
-}
-
 // The handoff's chip: 1px outline, radius 9, and a primary-container fill
 // behind the label when selected. Deliberately not the library FilterChip,
 // which carries a check icon and a different radius.
@@ -266,8 +237,9 @@ component PreviewShape inherits Rectangle {
 
 export component AppWindow inherits Window {
     title: "optination — cursor themes";
-    no-frame: true;
-    background: transparent;
+    // Hyprland draws the frame, the rounding and the shadow. Drawing our own
+    // meant a transparent-cornered surface the tiler had to work around.
+    background: Skin.surface;
     preferred-width: 1000px;
     preferred-height: 640px;
     min-width: 880px;
@@ -300,7 +272,6 @@ export component AppWindow inherits Window {
     in-out property <int> selected: -1;
     in-out property <float> size: 32;
     in-out property <string> filter;
-    in-out property <int> backdrop-mode: 0;
     in-out property <bool> dark: true;
     in-out property <int> accent: 0;
     in-out property <bool> menu-open: false;
@@ -321,17 +292,8 @@ export component AppWindow inherits Window {
     callback filters-changed();
     callback save();
     callback revert();
-    callback close-window();
-    callback minimize-window();
-    callback maximize-window();
     callback mode-changed();
     callback follow-theme-changed(bool);
-
-    // Preview backdrop stays separate from the app mode: a white cursor on a
-    // dark panel and a black one on a light panel are equally invisible.
-    property <color> backdrop:
-        backdrop-mode == 0 ? #121215 :
-        backdrop-mode == 1 ? #fbfbfd : #8a8d94;
 
     public function sync-skin() {
         Skin.accent = root.accent;
@@ -342,12 +304,8 @@ export component AppWindow inherits Window {
 
     init => { root.sync-skin(); }
 
-    // Window body. The radius is drawn here because the window itself is
-    // frameless.
     Rectangle {
-        border-radius: 28px;
         background: Skin.surface;
-        clip: true;
 
         VerticalLayout {
             // ----------------------------------------------- title bar ---
@@ -416,24 +374,6 @@ export component AppWindow inherits Window {
                             }
                         }
 
-                        Rectangle { width: 10px; }
-
-                        WindowButton {
-                            icon: @image-url("icons/minimize.svg");
-                            tip: "Minimise";
-                            clicked => { root.minimize-window(); }
-                        }
-                        WindowButton {
-                            icon: @image-url("icons/maximize.svg");
-                            tip: "Maximise";
-                            clicked => { root.maximize-window(); }
-                        }
-                        WindowButton {
-                            icon: @image-url("icons/close.svg");
-                            danger: true;
-                            tip: "Close";
-                            clicked => { root.close-window(); }
-                        }
                     }
                 }
 
@@ -478,14 +418,31 @@ export component AppWindow inherits Window {
 
                                 VerticalLayout {
                                     alignment: center;
-                                    input := TextInput {
-                                        text <=> root.filter;
-                                        font-size: 14px;
-                                        color: Skin.on-surface;
-                                        single-line: true;
-                                        vertical-alignment: center;
-                                        accessible-label: "Search cursor themes";
-                                        edited => { root.filter-changed(self.text); }
+                                    // The placeholder lives inside the input's
+                                    // own cell; positioned over the whole field
+                                    // it ran straight through the count.
+                                    Rectangle {
+                                        height: 20px;
+                                        input := TextInput {
+                                            width: 100%;
+                                            height: 100%;
+                                            text <=> root.filter;
+                                            font-size: 14px;
+                                            color: Skin.on-surface;
+                                            single-line: true;
+                                            vertical-alignment: center;
+                                            accessible-label: "Search cursor themes";
+                                            edited => { root.filter-changed(self.text); }
+                                        }
+                                        if root.filter == "": Text {
+                                            width: 100%;
+                                            height: 100%;
+                                            text: "Search cursor themes";
+                                            font-size: 14px;
+                                            color: Skin.on-surface-variant;
+                                            vertical-alignment: center;
+                                            overflow: elide;
+                                        }
                                     }
                                 }
 
@@ -498,16 +455,6 @@ export component AppWindow inherits Window {
                                         color: Skin.on-surface-variant;
                                     }
                                 }
-                            }
-
-                            // TextInput has no placeholder of its own.
-                            if root.filter == "": Text {
-                                x: 44px;
-                                text: "Search cursor themes";
-                                font-size: 14px;
-                                color: Skin.on-surface-variant;
-                                vertical-alignment: center;
-                                height: 100%;
                             }
                         }
 
@@ -566,7 +513,7 @@ export component AppWindow inherits Window {
                     Rectangle {
                         min-height: 250px;
                         border-radius: 24px;
-                        background: root.backdrop;
+                        background: Skin.a.preview;
                         clip: true;
 
                         Image {
@@ -599,57 +546,46 @@ export component AppWindow inherits Window {
                             }
                         }
 
-                        Text {
-                            x: 18px;
-                            y: 16px;
-                            text: "LIVE PREVIEW";
-                            font-family: "Roboto Mono";
-                            font-size: 11px;
-                            letter-spacing: 0.6px;
-                            color: Skin.a.primary;
-                        }
-
-                        // Backdrop control, kept from the previous UI.
-                        HorizontalLayout {
-                            x: parent.width - self.width - 16px;
-                            y: 14px;
-                            spacing: 4px;
-                            for label[i] in ["dark", "light", "mid"]: Rectangle {
-                                width: 44px;
-                                height: 22px;
-                                border-radius: 11px;
-                                background: root.backdrop-mode == i ? Skin.a.primary
-                                    : Skin.surface.with-alpha(0.55);
+                        // Overlays. Each sits in a full-size layout rather than
+                        // being placed by x/y: a bare positioned child of a
+                        // Rectangle takes the parent's full width and the label
+                        // and badge stretched right across the preview.
+                        VerticalLayout {
+                            padding: 16px;
+                            alignment: start;
+                            HorizontalLayout {
+                                alignment: start;
                                 Text {
-                                    text: label;
-                                    font-size: 10px;
-                                    font-weight: 500;
-                                    color: root.backdrop-mode == i ? Skin.a.on-primary
-                                        : Skin.on-surface-variant;
-                                }
-                                TouchArea {
-                                    mouse-cursor: pointer;
-                                    clicked => { root.backdrop-mode = i; }
+                                    text: "LIVE PREVIEW";
+                                    font-family: "Roboto Mono";
+                                    font-size: 11px;
+                                    letter-spacing: 0.6px;
+                                    color: Skin.a.primary;
                                 }
                             }
                         }
 
-                        Rectangle {
-                            x: parent.width - self.width - 16px;
-                            y: parent.height - self.height - 16px;
-                            height: 26px;
-                            border-radius: 12px;
-                            background: Skin.a.primary;
+                        VerticalLayout {
+                            padding: 16px;
+                            alignment: end;
                             HorizontalLayout {
-                                padding-left: 12px;
-                                padding-right: 12px;
-                                Text {
-                                    text: Math.round(root.size) + " px";
-                                    font-family: "Roboto Mono";
-                                    font-size: 13px;
-                                    font-weight: 500;
-                                    color: Skin.a.on-primary;
-                                    vertical-alignment: center;
+                                alignment: end;
+                                Rectangle {
+                                    height: 26px;
+                                    border-radius: 13px;
+                                    background: Skin.a.primary;
+                                    HorizontalLayout {
+                                        padding-left: 12px;
+                                        padding-right: 12px;
+                                        Text {
+                                            text: Math.round(root.size) + " px";
+                                            font-family: "Roboto Mono";
+                                            font-size: 13px;
+                                            font-weight: 500;
+                                            color: Skin.a.on-primary;
+                                            vertical-alignment: center;
+                                        }
+                                    }
                                 }
                             }
                         }

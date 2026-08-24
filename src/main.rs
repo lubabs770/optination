@@ -472,26 +472,5 @@ fn main() -> Result<(), slint::PlatformError> {
         }
     });
 
-    ui.on_close_window({
-        let ui = ui.as_weak();
-        move || {
-            let _ = ui.unwrap().window().hide();
-        }
-    });
-
-    ui.on_minimize_window({
-        let ui = ui.as_weak();
-        move || ui.unwrap().window().set_minimized(true)
-    });
-
-    ui.on_maximize_window({
-        let ui = ui.as_weak();
-        move || {
-            let window = ui.unwrap();
-            let window = window.window();
-            window.set_maximized(!window.is_maximized());
-        }
-    });
-
     ui.run()
 }
