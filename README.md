@@ -8,7 +8,7 @@ theme on the system with its actual pointer, I-beam, hand, resize, busy and
 no-drop shapes rendered at the size you are about to use, applies your pick to
 the live pointer the moment you click it, and only writes to disk when you say so.
 
-| Light | Dark, with the accent menu open |
+| Light | Dark |
 |---|---|
 | ![optination in light mode](docs/light.png) | ![optination in dark mode](docs/dark.png) |
 
@@ -16,27 +16,11 @@ Built with [Slint](https://slint.dev) and the
 [material component library](https://github.com/slint-ui/material-rust-template),
 vendored under `material-1.0/`, to a Material 3 design handoff.
 
-## Layout
-
-A title bar over two panes. The window keeps its normal frame: Hyprland already
-draws the rounding and the shadow, and painting our own left a
-transparent-cornered surface the tiler had to work around.
-
-- **Title bar** — app mark, `Cursor / Appearance · Pointer`, then the accent
-  menu and the light/dark toggle in the top-right corner.
-- **Left pane** — search field, filter chips, and one row per theme: the theme's
-  own pointer rasterized into a 44px tile, its name, and a meta line of format,
-  shape count, tone and handedness.
-- **Right pane** — the live preview (pointer at 1.9× the chosen size, the other
-  five shapes at 1.25×, on the accent's lightest tone under a dot grid), the size
-  slider flanked by one-pixel step buttons, tick buttons at 16/24/32/48/64/96,
-  the resolved `hyprctl setcursor` line, and Reset / Apply.
+## stuff
 
 The slider snaps to even sizes and the ticks jump; the `-` and `+` buttons move a
 single pixel at a time, so an odd size is reachable.
 
-There is one light/dark system, the app's own. The preview surface follows it
-along with everything else.
 
 Only the selected theme is rendered at full size, and the row thumbnails are
 rendered once at a fixed size, so moving the slider re-renders one theme rather
