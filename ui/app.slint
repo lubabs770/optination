@@ -1,127 +1,180 @@
 import { Palette } from "std-widgets.slint";
 import {
-    MaterialWindow,
     MaterialPalette,
     MaterialTypography,
     MaterialAnimations,
     MaterialText,
-    TextField,
     Slider,
-    SegmentedButton,
-    FilterChip,
     Switch,
     FilledButton,
-    OutlineButton,
+    TextButton,
     ListView,
 } from "@material";
+import { Skin } from "skin.slint";
 
 export struct ThemeCard {
     name: string,
-    comment: string,
-    badge: string,
-    shapes: int,
-    user-installed: bool,
-    mirrored: bool,
-    tone: string,
-    // Six preview slots, in the order of render::SLOTS. Flat fields rather than
-    // an array so each cell can be laid out and labelled independently.
-    p0: image,
-    p1: image,
-    p2: image,
-    p3: image,
-    p4: image,
-    p5: image,
-    // Whether each slot produced anything. A theme that simply does not define
-    // a `wait` shape is a fact worth showing, not an unexplained hole.
-    h0: bool,
-    h1: bool,
-    h2: bool,
-    h3: bool,
-    h4: bool,
-    h5: bool,
+    meta: string,
+    tile: image,
+    has-tile: bool,
 }
 
-component Tag inherits Rectangle {
-    in property <string> text;
-    in property <color> tint: MaterialPalette.on-surface-variant;
+// ---------------------------------------------------------------- pieces ---
 
-    background: tint.with-alpha(0.14);
-    border-radius: 4px;
-    height: 20px;
-    HorizontalLayout {
-        padding-left: 8px;
-        padding-right: 8px;
-        MaterialText {
-            text: root.text;
-            style: MaterialTypography.label-small;
-            color: tint;
-            vertical-alignment: center;
-        }
+component StateLayer inherits Rectangle {
+    in property <bool> active;
+    background: active ? Skin.state-layer : transparent;
+    animate background { duration: 120ms; easing: MaterialAnimations.standard-easing; }
+}
+
+component IconButton inherits Rectangle {
+    in property <image> icon;
+    in property <bool> open;
+    in property <length> box: 36px;
+    in property <string> tip;
+    callback clicked;
+
+    width: box;
+    height: box;
+    border-radius: box / 2;
+    background: open ? Skin.a.container : (touch.has-hover ? Skin.state-layer : transparent);
+    animate background { duration: 120ms; easing: MaterialAnimations.standard-easing; }
+
+    accessible-role: button;
+    accessible-label: tip;
+    accessible-action-default => { root.clicked(); }
+
+    Image {
+        source: root.icon;
+        width: 18px;
+        height: 18px;
+        colorize: root.open ? Skin.a.on-container : Skin.on-surface-variant;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
     }
 }
 
-component PreviewCell inherits Rectangle {
-    in property <image> source;
-    in property <bool> present;
-    in property <string> label;
-    in property <length> box;
-    in property <color> ink;
+component WindowButton inherits Rectangle {
+    in property <image> icon;
+    in property <bool> danger;
+    in property <string> tip;
+    callback clicked;
 
-    width: box + 12px;
-    VerticalLayout {
-        spacing: 4px;
-        alignment: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 16px;
+    background: danger ? Skin.error-container : Skin.state-layer;
+    opacity: touch.has-hover ? 1.0 : 0.85;
 
-        Rectangle {
-            height: root.box;
-            // Drawn at true pixel size: the preview is the cursor itself, not
-            // an approximation of it.
-            if root.present: Image {
-                source: root.source;
-                image-fit: contain;
-                image-rendering: smooth;
-                width: 100%;
-                height: 100%;
-            }
-            // An explicit "this theme does not define this shape" mark. Without
-            // it a gap reads as a rendering bug.
-            if !root.present: Rectangle {
-                width: 14px;
-                height: 2px;
-                border-radius: 1px;
-                background: root.ink.with-alpha(0.35);
-            }
+    accessible-role: button;
+    accessible-label: tip;
+    accessible-action-default => { root.clicked(); }
+
+    Image {
+        source: root.icon;
+        width: 14px;
+        height: 14px;
+        colorize: root.danger ? Skin.on-error-container : Skin.on-surface;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// The handoff's chip: 1px outline, radius 9, and a primary-container fill
+// behind the label when selected. Deliberately not the library FilterChip,
+// which carries a check icon and a different radius.
+component Chip inherits Rectangle {
+    in property <string> text;
+    in-out property <bool> checked;
+    callback toggled;
+
+    height: 28px;
+    border-radius: 9px;
+    border-width: 1px;
+    border-color: checked ? transparent : Skin.chip-border;
+    background: checked ? Skin.a.container : (touch.has-hover ? Skin.state-layer : transparent);
+    animate background { duration: 120ms; easing: MaterialAnimations.standard-easing; }
+
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-checkable: true;
+    accessible-checked: root.checked;
+    accessible-action-default => { root.toggle(); }
+
+    HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 14px;
+        Text {
+            text: root.text;
+            font-size: 12px;
+            font-weight: 500;
+            color: root.checked ? Skin.a.on-container : Skin.on-surface;
+            vertical-alignment: center;
         }
+    }
 
-        MaterialText {
-            text: root.label;
-            style: MaterialTypography.label-small;
-            color: root.ink.with-alpha(root.present ? 0.6 : 0.35);
-            horizontal-alignment: center;
-        }
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.toggle(); }
+    }
+
+    function toggle() {
+        root.checked = !root.checked;
+        root.toggled();
+    }
+}
+
+component Tick inherits Rectangle {
+    in property <int> value;
+    in property <bool> current;
+    callback clicked;
+
+    height: 30px;
+    border-radius: 10px;
+    background: current ? Skin.a.container : Skin.container;
+    animate background { duration: 120ms; easing: MaterialAnimations.standard-easing; }
+
+    accessible-role: button;
+    accessible-label: root.value + " pixels";
+    accessible-action-default => { root.clicked(); }
+
+    Text {
+        text: root.value;
+        font-family: "Roboto Mono";
+        font-size: 12px;
+        color: root.current ? Skin.a.on-container : Skin.on-surface;
+    }
+
+    TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
     }
 }
 
 component ThemeRow inherits Rectangle {
     in property <ThemeCard> card;
     in property <bool> selected;
-    in property <bool> is-current;
-    in property <color> backdrop;
-    in property <color> backdrop-ink;
-    in property <length> box;
-    in property <[string]> labels;
     callback clicked;
 
-    height: root.box + 66px;
-    border-radius: 12px;
-    border-width: selected ? 2px : 1px;
-    border-color: selected ? MaterialPalette.primary : MaterialPalette.outline-variant;
-    background: selected ? MaterialPalette.secondary-container
-        : touch.has-hover ? MaterialPalette.surface-container-high
-        : MaterialPalette.surface-container-low;
-    animate background, border-color {
-        duration: MaterialAnimations.standard-accelerate-duration;
-        easing: MaterialAnimations.standard-easing;
+    height: 64px;
+    border-radius: 16px;
+    background: touch.has-hover ? Skin.state-layer : transparent;
+
+    accessible-role: button;
+    accessible-label: root.card.name + ", " + root.card.meta;
+    accessible-action-default => { root.clicked(); }
+
+    // The selected fill sits behind the content, per the handoff.
+    if root.selected: Rectangle {
+        border-radius: parent.border-radius;
+        background: Skin.a.container;
+        opacity: 0.6;
     }
 
     touch := TouchArea {
@@ -130,97 +183,135 @@ component ThemeRow inherits Rectangle {
     }
 
     HorizontalLayout {
-        padding: 14px;
-        spacing: 16px;
+        padding-left: 14px;
+        padding-right: 14px;
+        padding-top: 10px;
+        padding-bottom: 10px;
+        spacing: 12px;
 
-        VerticalLayout {
-            width: 268px;
-            spacing: 6px;
-            alignment: center;
-
-            HorizontalLayout {
-                spacing: 6px;
-                alignment: start;
-                MaterialText {
-                    text: root.card.name;
-                    style: MaterialTypography.title-small;
-                    color: root.selected ? MaterialPalette.on-secondary-container
-                        : MaterialPalette.on-surface;
-                    overflow: elide;
-                }
-                if root.is-current: Tag { text: "in use"; tint: MaterialPalette.tertiary; }
-            }
-
-            HorizontalLayout {
-                spacing: 6px;
-                alignment: start;
-                Tag {
-                    text: root.card.badge;
-                    tint: root.card.badge == "hypr" ? MaterialPalette.primary
-                        : MaterialPalette.on-surface-variant;
-                }
-                Tag { text: root.card.shapes + " shapes"; }
-                if root.card.tone != "": Tag { text: root.card.tone; }
-                if root.card.mirrored: Tag { text: "mirrored"; }
-                if root.card.user-installed: Tag { text: "~/"; tint: MaterialPalette.secondary; }
-            }
-
-            if root.card.comment != "": MaterialText {
-                text: root.card.comment;
-                style: MaterialTypography.body-small;
-                color: MaterialPalette.on-surface-variant;
-                overflow: elide;
-                wrap: no-wrap;
+        // Preview tile: the theme's own pointer, rasterized.
+        Rectangle {
+            width: 44px;
+            height: 44px;
+            border-radius: 14px;
+            background: Skin.dark ? #0e1116 : #ffffff;
+            border-width: 1px;
+            border-color: Skin.hairline;
+            clip: true;
+            if root.card.has-tile: Image {
+                source: root.card.tile;
+                image-fit: contain;
+                image-rendering: smooth;
+                width: 30px;
+                height: 30px;
             }
         }
 
-        // Preview strip. Its backdrop is controlled separately from the app
-        // theme, because a white cursor on a dark panel and a black one on a
-        // light panel are equally invisible.
-        Rectangle {
-            background: root.backdrop;
-            border-radius: 8px;
-            border-width: 1px;
-            border-color: MaterialPalette.outline-variant;
-            HorizontalLayout {
-                padding: 8px;
-                spacing: 2px;
-                alignment: start;
-                PreviewCell { source: root.card.p0; present: root.card.h0; label: root.labels[0]; box: root.box; ink: root.backdrop-ink; }
-                PreviewCell { source: root.card.p1; present: root.card.h1; label: root.labels[1]; box: root.box; ink: root.backdrop-ink; }
-                PreviewCell { source: root.card.p2; present: root.card.h2; label: root.labels[2]; box: root.box; ink: root.backdrop-ink; }
-                PreviewCell { source: root.card.p3; present: root.card.h3; label: root.labels[3]; box: root.box; ink: root.backdrop-ink; }
-                PreviewCell { source: root.card.p4; present: root.card.h4; label: root.labels[4]; box: root.box; ink: root.backdrop-ink; }
-                PreviewCell { source: root.card.p5; present: root.card.h5; label: root.labels[5]; box: root.box; ink: root.backdrop-ink; }
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            Text {
+                text: root.card.name;
+                font-size: 14px;
+                font-weight: 500;
+                color: Skin.on-surface;
+                overflow: elide;
+            }
+            Text {
+                text: root.card.meta;
+                font-size: 11.5px;
+                color: Skin.on-surface-variant;
+                overflow: elide;
+            }
+        }
+
+        Rectangle { }
+
+        VerticalLayout {
+            alignment: center;
+            if root.selected: Rectangle {
+                width: 18px;
+                height: 18px;
+                border-radius: 9px;
+                background: Skin.a.primary;
+                Image {
+                    source: @image-url("icons/check.svg");
+                    width: 12px;
+                    height: 12px;
+                    colorize: Skin.a.on-primary;
+                }
             }
         }
     }
 }
 
-export component AppWindow inherits MaterialWindow {
+component PreviewShape inherits Rectangle {
+    in property <image> source;
+    in property <bool> present;
+    in property <length> box;
+
+    width: box;
+    height: box;
+    if present: Image {
+        source: root.source;
+        image-fit: contain;
+        image-rendering: smooth;
+        width: 100%;
+        height: 100%;
+    }
+    // A shape the theme does not define, marked rather than left as a hole.
+    if !present: Rectangle {
+        width: 14px;
+        height: 2px;
+        border-radius: 1px;
+        background: Skin.on-surface-variant.with-alpha(0.5);
+    }
+}
+
+// ------------------------------------------------------------------ app ---
+
+export component AppWindow inherits Window {
     title: "optination — cursor themes";
-    preferred-width: 1240px;
-    preferred-height: 880px;
-    min-width: 900px;
+    no-frame: true;
+    background: transparent;
+    preferred-width: 1000px;
+    preferred-height: 640px;
+    min-width: 880px;
     min-height: 560px;
+    default-font-family: "Roboto";
 
     in property <[ThemeCard]> cards;
-    in property <[string]> slot-labels;
-    in property <string> current-theme;
     in property <int> total;
+    in property <string> command;
     in property <string> status;
     in property <bool> status-is-error;
     in property <string> stale-conf;
     in property <bool> can-revert;
+    in property <string> sel-name;
+    in property <image> dots;
+
+    in property <image> sel-p0;
+    in property <image> sel-p1;
+    in property <image> sel-p2;
+    in property <image> sel-p3;
+    in property <image> sel-p4;
+    in property <image> sel-p5;
+    in property <bool> sel-h0;
+    in property <bool> sel-h1;
+    in property <bool> sel-h2;
+    in property <bool> sel-h3;
+    in property <bool> sel-h4;
+    in property <bool> sel-h5;
 
     in-out property <int> selected: -1;
     in-out property <float> size: 32;
     in-out property <string> filter;
     in-out property <int> backdrop-mode: 0;
-    in-out property <bool> dark-mode: true;
+    in-out property <bool> dark: true;
+    in-out property <int> accent: 0;
+    in-out property <bool> menu-open: false;
+    in-out property <bool> follow-theme: false;
 
-    // Filter chips. Within a group the active chips are OR-ed; across groups
-    // they are AND-ed, so "hyprcursor + dark" narrows rather than empties.
     in-out property <bool> f-x11;
     in-out property <bool> f-hypr;
     in-out property <bool> f-light;
@@ -230,252 +321,522 @@ export component AppWindow inherits MaterialWindow {
     in-out property <bool> f-system;
     in-out property <bool> f-user;
 
-    callback apply-live(int, int);
-    callback persist(int, int);
-    callback revert();
+    callback select(int);
     callback size-changed(int);
     callback filter-changed(string);
     callback filters-changed();
+    callback save();
+    callback revert();
+    callback close-window();
+    callback minimize-window();
+    callback maximize-window();
+    callback mode-changed();
+    callback follow-theme-changed(bool);
 
+    // Preview backdrop stays separate from the app mode: a white cursor on a
+    // dark panel and a black one on a light panel are equally invisible.
     property <color> backdrop:
         backdrop-mode == 0 ? #121215 :
         backdrop-mode == 1 ? #fbfbfd : #8a8d94;
-    property <color> backdrop-ink: backdrop-mode == 1 ? #121215 : #fbfbfd;
 
-    // Cursors are drawn 1:1, so the cell must hold the largest offered size.
-    property <length> box: 64px;
-
-    function apply-scheme() {
-        Palette.color-scheme = root.dark-mode ? ColorScheme.dark : ColorScheme.light;
+    public function sync-skin() {
+        Skin.accent = root.accent;
+        Skin.dark = root.dark;
+        MaterialPalette.schemes = Skin.schemes;
+        Palette.color-scheme = root.dark ? ColorScheme.dark : ColorScheme.light;
     }
 
-    init => { root.apply-scheme(); }
+    init => { root.sync-skin(); }
 
-    VerticalLayout {
-        padding: 16px;
-        spacing: 12px;
+    // Window body. The radius is drawn here because the window itself is
+    // frameless.
+    Rectangle {
+        border-radius: 28px;
+        background: Skin.surface;
+        clip: true;
 
-        // ------------------------------------------------------- toolbar ---
-        HorizontalLayout {
-            spacing: 16px;
-            height: 56px;
+        VerticalLayout {
+            // ----------------------------------------------- title bar ---
+            Rectangle {
+                height: 66px;
+                background: Skin.container;
 
-            VerticalLayout {
-                alignment: center;
-                MaterialText {
-                    text: "optination";
-                    style: MaterialTypography.headline-small;
-                    color: MaterialPalette.on-surface;
+                HorizontalLayout {
+                    padding-left: 24px;
+                    padding-right: 20px;
+                    padding-top: 16px;
+                    padding-bottom: 14px;
+                    spacing: 12px;
+
+                    Rectangle {
+                        width: 36px;
+                        height: 36px;
+                        border-radius: 12px;
+                        background: Skin.a.container;
+                        Image {
+                            source: @image-url("icons/pointer.svg");
+                            width: 18px;
+                            height: 18px;
+                            colorize: Skin.a.on-container;
+                        }
+                    }
+
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 1px;
+                        Text {
+                            text: "Cursor";
+                            font-size: 20px;
+                            font-weight: 500;
+                            letter-spacing: 0.1px;
+                            color: Skin.on-surface;
+                        }
+                        Text {
+                            text: "Appearance · Pointer";
+                            font-size: 12px;
+                            color: Skin.on-surface-variant;
+                        }
+                    }
+
+                    Rectangle { }
+
+                    HorizontalLayout {
+                        alignment: center;
+                        spacing: 4px;
+
+                        IconButton {
+                            icon: @image-url("icons/palette.svg");
+                            open: root.menu-open;
+                            tip: "Accent colour";
+                            clicked => { root.menu-open = !root.menu-open; }
+                        }
+
+                        IconButton {
+                            icon: root.dark ? @image-url("icons/moon.svg")
+                                : @image-url("icons/sun.svg");
+                            tip: root.dark ? "Switch to light" : "Switch to dark";
+                            clicked => {
+                                root.dark = !root.dark;
+                                root.sync-skin();
+                                root.mode-changed();
+                            }
+                        }
+
+                        Rectangle { width: 10px; }
+
+                        WindowButton {
+                            icon: @image-url("icons/minimize.svg");
+                            tip: "Minimise";
+                            clicked => { root.minimize-window(); }
+                        }
+                        WindowButton {
+                            icon: @image-url("icons/maximize.svg");
+                            tip: "Maximise";
+                            clicked => { root.maximize-window(); }
+                        }
+                        WindowButton {
+                            icon: @image-url("icons/close.svg");
+                            danger: true;
+                            tip: "Close";
+                            clicked => { root.close-window(); }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    y: parent.height - 1px;
+                    height: 1px;
+                    background: Skin.hairline;
                 }
             }
 
-            VerticalLayout {
-                width: 220px;
-                alignment: center;
-                TextField {
-                    label: "filter";
-                    placeholder-text: "name, comment or format";
-                    text <=> root.filter;
-                    edited(text) => { root.filter-changed(text); }
-                }
-            }
-
+            // ---------------------------------------------------- body ---
             HorizontalLayout {
-                spacing: 10px;
-                width: 230px;
-                VerticalLayout {
-                    alignment: center;
-                    MaterialText {
-                        text: "size " + Math.round(root.size) + "px";
-                        style: MaterialTypography.label-large;
-                        color: MaterialPalette.on-surface-variant;
+                // ----------------------------------------- left pane ---
+                Rectangle {
+                    width: 392px;
+                    background: Skin.pane;
+
+                    VerticalLayout {
+                        padding: 20px;
+                        spacing: 14px;
+
+                        // Search
+                        Rectangle {
+                            height: 48px;
+                            border-radius: 24px;
+                            background: Skin.container-high;
+
+                            HorizontalLayout {
+                                padding-left: 16px;
+                                padding-right: 16px;
+                                spacing: 10px;
+
+                                VerticalLayout {
+                                    alignment: center;
+                                    Image {
+                                        source: @image-url("icons/search.svg");
+                                        width: 18px;
+                                        height: 18px;
+                                        colorize: Skin.on-surface-variant;
+                                    }
+                                }
+
+                                VerticalLayout {
+                                    alignment: center;
+                                    input := TextInput {
+                                        text <=> root.filter;
+                                        font-size: 14px;
+                                        color: Skin.on-surface;
+                                        single-line: true;
+                                        vertical-alignment: center;
+                                        accessible-label: "Search cursor themes";
+                                        edited => { root.filter-changed(self.text); }
+                                    }
+                                }
+
+                                VerticalLayout {
+                                    alignment: center;
+                                    Text {
+                                        text: root.cards.length + " themes";
+                                        font-family: "Roboto Mono";
+                                        font-size: 11px;
+                                        color: Skin.on-surface-variant;
+                                    }
+                                }
+                            }
+
+                            // TextInput has no placeholder of its own.
+                            if root.filter == "": Text {
+                                x: 44px;
+                                text: "Search cursor themes";
+                                font-size: 14px;
+                                color: Skin.on-surface-variant;
+                                vertical-alignment: center;
+                                height: 100%;
+                            }
+                        }
+
+                        // Filter chips, in the app's real groups.
+                        VerticalLayout {
+                            spacing: 8px;
+                            HorizontalLayout {
+                                spacing: 8px;
+                                alignment: start;
+                                Chip { text: "X11"; checked <=> root.f-x11; toggled => { root.filters-changed(); } }
+                                Chip { text: "hyprcursor"; checked <=> root.f-hypr; toggled => { root.filters-changed(); } }
+                                Chip { text: "light"; checked <=> root.f-light; toggled => { root.filters-changed(); } }
+                                Chip { text: "dark"; checked <=> root.f-dark; toggled => { root.filters-changed(); } }
+                            }
+                            HorizontalLayout {
+                                spacing: 8px;
+                                alignment: start;
+                                Chip { text: "standard"; checked <=> root.f-standard; toggled => { root.filters-changed(); } }
+                                Chip { text: "mirrored"; checked <=> root.f-mirrored; toggled => { root.filters-changed(); } }
+                                Chip { text: "system"; checked <=> root.f-system; toggled => { root.filters-changed(); } }
+                                Chip { text: "user"; checked <=> root.f-user; toggled => { root.filters-changed(); } }
+                            }
+                        }
+
+                        ListView {
+                            for card[i] in root.cards: VerticalLayout {
+                                padding-bottom: 6px;
+                                ThemeRow {
+                                    card: card;
+                                    selected: root.selected == i;
+                                    clicked => {
+                                        root.selected = i;
+                                        root.select(i);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        x: parent.width - 1px;
+                        width: 1px;
+                        background: Skin.hairline;
                     }
                 }
+
+                // ---------------------------------------- right pane ---
                 VerticalLayout {
-                    alignment: center;
-                    Slider {
-                        minimum: 16;
-                        maximum: 64;
-                        value <=> root.size;
-                        released(v) => { root.size-changed(Math.round(v)); }
+                    padding-left: 24px;
+                    padding-right: 24px;
+                    padding-top: 20px;
+                    padding-bottom: 22px;
+                    spacing: 20px;
+
+                    // Live preview
+                    Rectangle {
+                        min-height: 250px;
+                        border-radius: 24px;
+                        background: root.backdrop;
+                        clip: true;
+
+                        Image {
+                            source: root.dots;
+                            image-fit: preserve;
+                            opacity: 0.9;
+                        }
+
+                        VerticalLayout {
+                            alignment: center;
+                            spacing: 18px;
+
+                            HorizontalLayout {
+                                alignment: center;
+                                PreviewShape {
+                                    source: root.sel-p0;
+                                    present: root.sel-h0;
+                                    box: Math.round(root.size * 1.9) * 1px;
+                                }
+                            }
+
+                            HorizontalLayout {
+                                alignment: center;
+                                spacing: 22px;
+                                PreviewShape { source: root.sel-p1; present: root.sel-h1; box: Math.round(root.size * 1.25) * 1px; }
+                                PreviewShape { source: root.sel-p2; present: root.sel-h2; box: Math.round(root.size * 1.25) * 1px; }
+                                PreviewShape { source: root.sel-p3; present: root.sel-h3; box: Math.round(root.size * 1.25) * 1px; }
+                                PreviewShape { source: root.sel-p4; present: root.sel-h4; box: Math.round(root.size * 1.25) * 1px; }
+                                PreviewShape { source: root.sel-p5; present: root.sel-h5; box: Math.round(root.size * 1.25) * 1px; }
+                            }
+                        }
+
+                        Text {
+                            x: 18px;
+                            y: 16px;
+                            text: "LIVE PREVIEW";
+                            font-family: "Roboto Mono";
+                            font-size: 11px;
+                            letter-spacing: 0.6px;
+                            color: Skin.a.primary;
+                        }
+
+                        // Backdrop control, kept from the previous UI.
+                        HorizontalLayout {
+                            x: parent.width - self.width - 16px;
+                            y: 14px;
+                            spacing: 4px;
+                            for label[i] in ["dark", "light", "mid"]: Rectangle {
+                                width: 44px;
+                                height: 22px;
+                                border-radius: 11px;
+                                background: root.backdrop-mode == i ? Skin.a.primary
+                                    : Skin.surface.with-alpha(0.55);
+                                Text {
+                                    text: label;
+                                    font-size: 10px;
+                                    font-weight: 500;
+                                    color: root.backdrop-mode == i ? Skin.a.on-primary
+                                        : Skin.on-surface-variant;
+                                }
+                                TouchArea {
+                                    mouse-cursor: pointer;
+                                    clicked => { root.backdrop-mode = i; }
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            x: parent.width - self.width - 16px;
+                            y: parent.height - self.height - 16px;
+                            height: 26px;
+                            border-radius: 12px;
+                            background: Skin.a.primary;
+                            HorizontalLayout {
+                                padding-left: 12px;
+                                padding-right: 12px;
+                                Text {
+                                    text: Math.round(root.size) + " px";
+                                    font-family: "Roboto Mono";
+                                    font-size: 13px;
+                                    font-weight: 500;
+                                    color: Skin.a.on-primary;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
                     }
-                }
-            }
 
-            Rectangle { }
+                    // Size
+                    VerticalLayout {
+                        spacing: 10px;
 
-            VerticalLayout {
-                alignment: center;
-                SegmentedButton {
-                    items: [{ text: "dark" }, { text: "light" }, { text: "mid" }];
-                    current-index <=> root.backdrop-mode;
-                }
-            }
+                        HorizontalLayout {
+                            Text {
+                                text: "Size";
+                                font-size: 14px;
+                                font-weight: 500;
+                                color: Skin.on-surface;
+                            }
+                            Rectangle { }
+                            Text {
+                                text: "XCURSOR_SIZE";
+                                font-family: "Roboto Mono";
+                                font-size: 12px;
+                                color: Skin.on-surface-variant;
+                            }
+                        }
 
-            // App theme, distinct from the preview backdrop above it.
-            HorizontalLayout {
-                spacing: 8px;
-                VerticalLayout {
-                    alignment: center;
-                    Switch {
-                        checked <=> root.dark-mode;
-                        tooltip: "dark app theme";
-                        // `checked` is already two-way bound to dark-mode; this
-                        // only has to push the change into the palette.
-                        checked-state-changed(on) => { root.apply-scheme(); }
+                        Slider {
+                            minimum: 16;
+                            maximum: 96;
+                            value <=> root.size;
+                            released(v) => { root.size-changed(Math.round(v / 2) * 2); }
+                        }
+
+                        HorizontalLayout {
+                            spacing: 8px;
+                            for tick in [16, 24, 32, 48, 64, 96]: Tick {
+                                value: tick;
+                                current: Math.round(root.size) == tick;
+                                clicked => {
+                                    root.size = tick;
+                                    root.size-changed(tick);
+                                }
+                            }
+                        }
                     }
-                }
-                VerticalLayout {
-                    alignment: center;
-                    MaterialText {
-                        text: root.dark-mode ? "dark" : "light";
-                        style: MaterialTypography.label-large;
-                        color: MaterialPalette.on-surface-variant;
+
+                    if root.stale-conf != "": Rectangle {
+                        height: 28px;
+                        border-radius: 8px;
+                        background: Skin.a.container;
+                        HorizontalLayout {
+                            padding-left: 12px;
+                            padding-right: 12px;
+                            Text {
+                                text: "stale env = XCURSOR_* in " + root.stale-conf + " — inert since the Lua port";
+                                font-size: 11px;
+                                color: Skin.a.on-container;
+                                vertical-alignment: center;
+                                overflow: elide;
+                            }
+                        }
+                    }
+
+                    // Action row
+                    HorizontalLayout {
+                        spacing: 12px;
+
+                        VerticalLayout {
+                            alignment: center;
+                            Text {
+                                text: root.status-is-error ? root.status : root.command;
+                                font-family: "Roboto Mono";
+                                font-size: 11px;
+                                color: root.status-is-error ? MaterialPalette.error
+                                    : Skin.on-surface-variant;
+                                overflow: elide;
+                            }
+                        }
+
+                        Rectangle { }
+
+                        TextButton {
+                            text: "Reset";
+                            enabled: root.can-revert;
+                            clicked => { root.revert(); }
+                        }
+
+                        FilledButton {
+                            text: "Apply";
+                            enabled: root.selected >= 0;
+                            clicked => { root.save(); }
+                        }
                     }
                 }
             }
         }
 
-        // --------------------------------------------------------- chips ---
-        HorizontalLayout {
-            spacing: 8px;
-            height: 34px;
-            alignment: start;
-
-            FilterChip {
-                text: "X11";
-                checked <=> root.f-x11;
-                changed checked => { root.filters-changed(); }
-            }
-            FilterChip {
-                text: "hyprcursor";
-                checked <=> root.f-hypr;
-                changed checked => { root.filters-changed(); }
-            }
-
-            Rectangle { width: 10px; }
-
-            FilterChip {
-                text: "light";
-                checked <=> root.f-light;
-                changed checked => { root.filters-changed(); }
-            }
-            FilterChip {
-                text: "dark";
-                checked <=> root.f-dark;
-                changed checked => { root.filters-changed(); }
-            }
-
-            Rectangle { width: 10px; }
-
-            FilterChip {
-                text: "standard";
-                checked <=> root.f-standard;
-                changed checked => { root.filters-changed(); }
-            }
-            FilterChip {
-                text: "mirrored";
-                checked <=> root.f-mirrored;
-                changed checked => { root.filters-changed(); }
-            }
-
-            Rectangle { width: 10px; }
-
-            FilterChip {
-                text: "system";
-                checked <=> root.f-system;
-                changed checked => { root.filters-changed(); }
-            }
-            FilterChip {
-                text: "user";
-                checked <=> root.f-user;
-                changed checked => { root.filters-changed(); }
-            }
-
-            Rectangle { }
-
-            VerticalLayout {
-                alignment: center;
-                MaterialText {
-                    text: root.cards.length + " / " + root.total + " themes";
-                    style: MaterialTypography.label-large;
-                    color: MaterialPalette.on-surface-variant;
-                }
-            }
+        // ------------------------------------------------ accent menu ---
+        if root.menu-open: TouchArea {
+            width: parent.width;
+            height: parent.height;
+            clicked => { root.menu-open = false; }
         }
 
-        // ---------------------------------------------------------- list ---
-        ListView {
-            for card[i] in root.cards: VerticalLayout {
-                padding-bottom: 8px;
-                ThemeRow {
-                    card: card;
-                    selected: root.selected == i;
-                    is-current: card.name == root.current-theme;
-                    backdrop: root.backdrop;
-                    backdrop-ink: root.backdrop-ink;
-                    box: root.box;
-                    labels: root.slot-labels;
-                    clicked => {
-                        root.selected = i;
-                        // Applying on click is the point: the real pointer
-                        // changes under your hand before you commit.
-                        root.apply-live(i, Math.round(root.size));
+        if root.menu-open: Rectangle {
+            x: parent.width - self.width - 74px;
+            y: 62px;
+            width: 268px;
+            height: menu.preferred-height;
+            border-radius: 20px;
+            background: Skin.container;
+            drop-shadow-blur: 28px;
+            drop-shadow-color: Skin.dark ? rgba(0, 0, 0, 0.7) : rgba(20, 14, 10, 0.3);
+            drop-shadow-offset-y: 12px;
+
+            menu := VerticalLayout {
+                padding: 16px;
+                spacing: 12px;
+
+                Text {
+                    text: "Accent color";
+                    font-size: 13px;
+                    font-weight: 500;
+                    color: Skin.on-surface;
+                }
+
+                // Six swatches, each split primary over primary-container.
+                HorizontalLayout {
+                    spacing: 10px;
+                    for swatch[i] in Skin.dark ? Skin.dark-accents : Skin.light-accents: Rectangle {
+                        width: 32px;
+                        height: 32px;
+                        border-radius: 16px;
+                        clip: true;
+                        border-width: root.accent == i ? 2px : 0;
+                        border-color: Skin.on-surface;
+
+                        accessible-role: button;
+                        accessible-label: swatch.name;
+
+                        VerticalLayout {
+                            Rectangle { background: swatch.primary; }
+                            Rectangle { background: swatch.container; }
+                        }
+
+                        TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => {
+                                root.accent = i;
+                                root.sync-skin();
+                            }
+                        }
                     }
                 }
-            }
-        }
 
-        if root.stale-conf != "": Rectangle {
-            height: 34px;
-            border-radius: 8px;
-            background: MaterialPalette.tertiary-container;
-            HorizontalLayout {
-                padding-left: 12px;
-                padding-right: 12px;
-                MaterialText {
-                    vertical-alignment: center;
-                    style: MaterialTypography.body-small;
-                    color: MaterialPalette.on-tertiary-container;
-                    text: "stale env = XCURSOR_* lines still in " + root.stale-conf + " — inert since the Lua port, safe to delete";
+                Rectangle { height: 1px; background: Skin.chip-border; }
+
+                HorizontalLayout {
+                    spacing: 8px;
+                    VerticalLayout {
+                        alignment: center;
+                        Text {
+                            text: "Follow Omarchy theme";
+                            font-size: 12px;
+                            color: Skin.on-surface-variant;
+                        }
+                    }
+                    Rectangle { }
+                    VerticalLayout {
+                        alignment: center;
+                        Switch {
+                            checked <=> root.follow-theme;
+                            checked-state-changed(on) => { root.follow-theme-changed(on); }
+                        }
+                    }
                 }
-            }
-        }
 
-        // -------------------------------------------------------- footer ---
-        HorizontalLayout {
-            height: 44px;
-            spacing: 12px;
-
-            VerticalLayout {
-                alignment: center;
-                MaterialText {
-                    text: root.status;
-                    style: MaterialTypography.body-medium;
-                    color: root.status-is-error ? MaterialPalette.error
-                        : MaterialPalette.on-surface-variant;
-                    overflow: elide;
+                Text {
+                    text: Skin.a.name + " · Material 3 tonal scheme";
+                    font-size: 11px;
+                    color: Skin.on-surface-variant;
                 }
-            }
-
-            Rectangle { }
-
-            OutlineButton {
-                text: "Revert";
-                enabled: root.can-revert;
-                clicked => { root.revert(); }
-            }
-
-            OutlineButton {
-                text: "Apply now";
-                enabled: root.selected >= 0;
-                clicked => { root.apply-live(root.selected, Math.round(root.size)); }
-            }
-
-            FilledButton {
-                text: "Save permanently";
-                enabled: root.selected >= 0;
-                clicked => { root.persist(root.selected, Math.round(root.size)); }
             }
         }
     }

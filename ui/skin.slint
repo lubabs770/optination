@@ -1,0 +1,172 @@
+// Accent schemes and neutrals from the M3 design handoff.
+//
+// The six accents are defined once as a small struct each; the full 49-field
+// MaterialScheme is then derived from the selected accent, so switching accent
+// or mode re-tones every vendored material component (buttons, chips, slider,
+// switch) rather than only the parts this app paints itself.
+
+import { MaterialSchemes } from "@material";
+
+export struct Accent {
+    name: string,
+    // M3 `primary` and its on-colour.
+    primary: color,
+    on-primary: color,
+    // M3 `primary-container` and its on-colour.
+    container: color,
+    on-container: color,
+    // Background of the live-preview surface: the accent's lightest tone.
+    preview: color,
+    // Unfilled portion of the size slider's track.
+    track: color,
+}
+
+export global Skin {
+    in property <int> accent: 0;
+    in property <bool> dark: false;
+
+    out property <[Accent]> light-accents: [
+        { name: "Cyan",   primary: #00658e, on-primary: #ffffff, container: #c6e7ff, on-container: #00405d, preview: #e3f2fd, track: #d3e2ea },
+        { name: "Purple", primary: #6750a4, on-primary: #ffffff, container: #e9ddff, on-container: #22005d, preview: #f2e9fb, track: #e0d5ee },
+        { name: "Green",  primary: #2c6c47, on-primary: #ffffff, container: #b0f1c4, on-container: #00210f, preview: #e0f4e7, track: #cfe6d6 },
+        { name: "Amber",  primary: #8f4c00, on-primary: #ffffff, container: #ffdcc2, on-container: #2e1500, preview: #ffeee2, track: #f0dcce },
+        { name: "Rose",   primary: #9a4057, on-primary: #ffffff, container: #ffd9e0, on-container: #3e0018, preview: #ffe9ee, track: #efd7dd },
+        { name: "Indigo", primary: #3b5bbf, on-primary: #ffffff, container: #dde1ff, on-container: #001355, preview: #eaedff, track: #d7dbef },
+    ];
+
+    out property <[Accent]> dark-accents: [
+        { name: "Cyan",   primary: #82cfff, on-primary: #003546, container: #004c6b, on-container: #c6e7ff, preview: #0c1b23, track: #2b3238 },
+        { name: "Purple", primary: #cfbcff, on-primary: #381e72, container: #4f378a, on-container: #e9ddff, preview: #191325, track: #332f3a },
+        { name: "Green",  primary: #95d5a9, on-primary: #00391f, container: #0e5231, on-container: #b0f1c4, preview: #0d1a12, track: #28322b },
+        { name: "Amber",  primary: #ffb77c, on-primary: #4c2600, container: #6d3900, on-container: #ffdcc2, preview: #211308, track: #37302a },
+        { name: "Rose",   primary: #ffb1c3, on-primary: #5e1130, container: #7c2a44, on-container: #ffd9e0, preview: #210f16, track: #372c30 },
+        { name: "Indigo", primary: #b6c4ff, on-primary: #122a77, container: #22408f, on-container: #dde1ff, preview: #0f1424, track: #2b2f3a },
+    ];
+
+    out property <Accent> light-a: root.light-accents[root.accent];
+    out property <Accent> dark-a: root.dark-accents[root.accent];
+    // The accent for the mode currently on screen.
+    out property <Accent> a: root.dark ? root.dark-a : root.light-a;
+
+    // Neutrals, straight from the handoff's table.
+    out property <color> surface: root.dark ? #111417 : #fdf8f6;
+    out property <color> pane: root.dark ? #161a1e : #faf3f0;
+    out property <color> container: root.dark ? #1b2024 : #f3edeb;
+    out property <color> container-high: root.dark ? #232a2f : #ece5e2;
+    out property <color> on-surface: root.dark ? #e2e2e5 : #1c1b1b;
+    out property <color> on-surface-variant: root.dark ? #8f9195 : #5c5654;
+    out property <color> state-layer: root.dark ? rgba(255, 255, 255, 0.07) : rgba(28, 27, 27, 0.06);
+    out property <color> hairline: root.dark ? rgba(255, 255, 255, 0.07) : rgba(20, 14, 10, 0.08);
+    out property <color> chip-border: root.dark ? #454c52 : #cbc4c2;
+    out property <color> dots: root.dark ? rgba(255, 255, 255, 0.11) : rgba(20, 14, 10, 0.13);
+    out property <color> error-container: root.dark ? #93000a : #ffdad6;
+    out property <color> on-error-container: root.dark ? #ffdad6 : #8c1d18;
+
+    // The handoff describes one accent family, so secondary and tertiary mirror
+    // primary: a vendored component that reaches for a secondary role still
+    // lands on the palette instead of falling back to the library's own blue.
+    out property <MaterialSchemes> schemes: {
+        light: {
+            primary: root.light-a.primary,
+            surfaceTint: root.light-a.primary,
+            onPrimary: root.light-a.on-primary,
+            primaryContainer: root.light-a.container,
+            onPrimaryContainer: root.light-a.on-container,
+            secondary: root.light-a.primary,
+            onSecondary: root.light-a.on-primary,
+            secondaryContainer: root.light-a.container,
+            onSecondaryContainer: root.light-a.on-container,
+            tertiary: root.light-a.primary,
+            onTertiary: root.light-a.on-primary,
+            tertiaryContainer: root.light-a.container,
+            onTertiaryContainer: root.light-a.on-container,
+            error: #8c1d18,
+            onError: #ffffff,
+            errorContainer: #ffdad6,
+            onErrorContainer: #8c1d18,
+            background: #fdf8f6,
+            onBackground: #1c1b1b,
+            surface: #fdf8f6,
+            onSurface: #1c1b1b,
+            surfaceVariant: #ece5e2,
+            onSurfaceVariant: #5c5654,
+            outline: #cbc4c2,
+            outlineVariant: #e0d9d6,
+            shadow: #000000,
+            scrim: #000000,
+            inverseSurface: #313030,
+            inverseOnSurface: #f4eff0,
+            inversePrimary: root.dark-accents[root.accent].primary,
+            primaryFixed: root.light-a.container,
+            onPrimaryFixed: root.light-a.on-container,
+            primaryFixedDim: root.light-a.primary,
+            onPrimaryFixedVariant: root.light-a.on-container,
+            secondaryFixed: root.light-a.container,
+            onSecondaryFixed: root.light-a.on-container,
+            secondaryFixedDim: root.light-a.primary,
+            onSecondaryFixedVariant: root.light-a.on-container,
+            tertiaryFixed: root.light-a.container,
+            onTertiaryFixed: root.light-a.on-container,
+            tertiaryFixedDim: root.light-a.primary,
+            onTertiaryFixedVariant: root.light-a.on-container,
+            surfaceDim: #ded8d9,
+            surfaceBright: #fdf8f6,
+            surfaceContainerLowest: #ffffff,
+            surfaceContainerLow: #faf3f0,
+            surfaceContainer: #f3edeb,
+            surfaceContainerHigh: #ece5e2,
+            surfaceContainerHighest: #e6e0e0,
+        },
+        dark: {
+            primary: root.dark-a.primary,
+            surfaceTint: root.dark-a.primary,
+            onPrimary: root.dark-a.on-primary,
+            primaryContainer: root.dark-a.container,
+            onPrimaryContainer: root.dark-a.on-container,
+            secondary: root.dark-a.primary,
+            onSecondary: root.dark-a.on-primary,
+            secondaryContainer: root.dark-a.container,
+            onSecondaryContainer: root.dark-a.on-container,
+            tertiary: root.dark-a.primary,
+            onTertiary: root.dark-a.on-primary,
+            tertiaryContainer: root.dark-a.container,
+            onTertiaryContainer: root.dark-a.on-container,
+            error: #ffb4ab,
+            onError: #690005,
+            errorContainer: #93000a,
+            onErrorContainer: #ffdad6,
+            background: #111417,
+            onBackground: #e2e2e5,
+            surface: #111417,
+            onSurface: #e2e2e5,
+            surfaceVariant: #232a2f,
+            onSurfaceVariant: #8f9195,
+            outline: #454c52,
+            outlineVariant: #2b3238,
+            shadow: #000000,
+            scrim: #000000,
+            inverseSurface: #e2e2e5,
+            inverseOnSurface: #2f3033,
+            inversePrimary: root.light-accents[root.accent].primary,
+            primaryFixed: root.dark-a.container,
+            onPrimaryFixed: root.dark-a.on-container,
+            primaryFixedDim: root.dark-a.primary,
+            onPrimaryFixedVariant: root.dark-a.on-container,
+            secondaryFixed: root.dark-a.container,
+            onSecondaryFixed: root.dark-a.on-container,
+            secondaryFixedDim: root.dark-a.primary,
+            onSecondaryFixedVariant: root.dark-a.on-container,
+            tertiaryFixed: root.dark-a.container,
+            onTertiaryFixed: root.dark-a.on-container,
+            tertiaryFixedDim: root.dark-a.primary,
+            onTertiaryFixedVariant: root.dark-a.on-container,
+            surfaceDim: #111417,
+            surfaceBright: #373a3e,
+            surfaceContainerLowest: #0c0e11,
+            surfaceContainerLow: #161a1e,
+            surfaceContainer: #1b2024,
+            surfaceContainerHigh: #232a2f,
+            surfaceContainerHighest: #2d3439,
+        },
+    };
+}
