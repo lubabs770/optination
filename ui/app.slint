@@ -21,12 +21,6 @@ export struct ThemeCard {
 
 // ---------------------------------------------------------------- pieces ---
 
-component StateLayer inherits Rectangle {
-    in property <bool> active;
-    background: active ? Skin.state-layer : transparent;
-    animate background { duration: 120ms; easing: MaterialAnimations.standard-easing; }
-}
-
 component IconButton inherits Rectangle {
     in property <image> icon;
     in property <bool> open;

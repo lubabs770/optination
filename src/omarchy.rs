@@ -62,7 +62,7 @@ pub fn accent() -> Option<(usize, bool)> {
     let index = ACCENT_PRIMARIES
         .iter()
         .enumerate()
-        .min_by_key(|(_, &candidate)| distance(rgb, candidate))
+        .min_by_key(|(_, candidate)| distance(rgb, **candidate))
         .map(|(i, _)| i)?;
     Some((index, dark))
 }
