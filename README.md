@@ -158,6 +158,19 @@ cargo build --release
 install -Dm755 target/release/optination ~/.local/bin/optination
 ```
 
+To get it into the application launcher, install the desktop entry and icon
+from `share/` as well:
+
+```sh
+install -Dm644 share/optination.desktop ~/.local/share/applications/optination.desktop
+install -Dm644 share/optination.svg ~/.local/share/icons/hicolor/scalable/apps/optination.svg
+update-desktop-database ~/.local/share/applications
+```
+
+The entry's `StartupWMClass` is `optination`, matching the xdg app id the app
+sets at startup, so the window carries the icon and is targetable by
+`windowrule` on that class.
+
 No system libraries beyond Wayland and a GPU driver. Xcursor parsing via
 `xcursor`, SVG via `resvg`, PNG via `png`, hyprcursor archives via `zip`.
 
