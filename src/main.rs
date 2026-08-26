@@ -235,6 +235,14 @@ fn main() -> Result<(), slint::PlatformError> {
     let original = (current_theme.clone(), current_size);
 
     let ui = AppWindow::new()?;
+
+    // Wayland compositors key the taskbar icon, alt-tab entry and window rules
+    // off the xdg app id, and Slint leaves it empty unless it is set here. It
+    // has to match the basename of the installed desktop entry. This has to come
+    // after the window is constructed — the id is stored on the platform context,
+    // which does not exist until then — but before it is shown, since that is
+    // when the surface is built.
+    slint::set_xdg_app_id("optination")?;
     ui.set_total(themes.len() as i32);
     ui.set_size(initial_size as f32);
     ui.set_can_revert(original.0.is_some());

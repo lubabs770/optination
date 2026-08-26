@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Optination
+GenericName=Cursor Theme Picker
+Comment=Pick a Hyprland cursor theme with live previews
+Exec=optination
+Icon=optination
+Terminal=false
+Categories=Settings;DesktopSettings;
+Keywords=cursor;pointer;theme;hyprcursor;xcursor;hyprland;wayland;
+StartupWMClass=optination
