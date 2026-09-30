@@ -8,36 +8,71 @@ theme on the system with its actual pointer, I-beam, hand, resize, busy and
 no-drop shapes rendered at the size you are about to use, applies your pick to
 the live pointer the moment you click it, and only writes to disk when you say so.
 
-| Light | Dark |
+![optination](preview.png)
+
+## One overlay, two hosts
+
+The picker is a single QML overlay (`qml/Picker.qml`) run by
+[Quickshell](https://quickshell.org). Only the host around it differs:
+
+| Where | Host | Colours |
+|---|---|---|
+| Omarchy | an overlay plugin inside the running `omarchy-shell` (`qml/omarchy/`) | the shell's live `[menu]` theme tokens — follows every theme switch |
+| any other Hyprland | its own short-lived Quickshell instance (`qml/standalone/`) | Omarchy's `colors.toml` if present, otherwise built-in dark defaults |
+
+`optination` with no arguments picks the right one and toggles it. Inside
+Omarchy it never starts a second Quickshell — the plugin lives in the shell
+that is already running. Outside it, the instance quits when the picker closes,
+so nothing idles in the background.
+
+The Rust binary is the engine behind both: it finds themes, renders their
+shapes to PNGs under `$XDG_CACHE_HOME/optination/` (reused until a theme's
+directory changes), and applies the choice. The overlay drives it through the
+`--json` flags below.
+
+## As an Omarchy plugin
+
+Plugin id `io.github.lubabs770.optination`, kind `overlay`, entry point
+`qml/Overlay.qml`; `manifest.json` sits at the repo root. The plugin is only
+the UI — it drives the `optination` binary, found on `PATH` or in
+`~/.local/bin`. If the binary is missing the picker opens with a message saying
+so instead of an empty list.
+
+```sh
+./install.sh                                   # binary + QML, links and enables the plugin
+omarchy-shell shell toggle io.github.lubabs770.optination
+omarchy plugin remove io.github.lubabs770.optination   # unlinks; nothing else is touched
+```
+
+**What it writes:** nothing on open or while browsing except the live pointer
+(`hyprctl setcursor`, `gsettings`). **Apply** writes the marked block in
+`looknfeel.lua` described under *Applying*. Its own files are a PNG cache in
+`$XDG_CACHE_HOME/optination/` and the list width in
+`$XDG_STATE_HOME/optination/ui.json`. It never edits keybindings or menu
+extensions.
+
+**Trust boundary:** everything read from the engine is size-capped and
+shape-checked before use, images load only from its own cache directory, all
+text renders as plain text, and every command runs as an argument vector — no
+shell strings built from theme names.
+
+**Closing:** Esc, a click outside the card, or `optination` again. Like
+Omarchy's own overlays it does not respond to Super+W: Hyprland handles that
+bind as *close window* before the overlay sees the key.
+
+## Keys
+
+| Key | Does |
 |---|---|
-| ![optination in light mode](docs/light.png) | ![optination in dark mode](docs/dark.png) |
+| `/` | search (Enter or Esc to leave the field) |
+| `j` `k` / `↓` `↑` | browse; the pointer under your hand follows |
+| `[` `]` | size −1 / +1 px |
+| Enter | apply and persist |
+| Esc | revert to what was active when it opened, and close |
 
-Built with [Slint](https://slint.dev) and the
-[material component library](https://github.com/slint-ui/material-rust-template),
-vendored under `material-1.0/`, to a Material 3 design handoff.
-
-## stuff
-
-The slider snaps to even sizes and the ticks jump; the `-` and `+` buttons move a
-single pixel at a time, so an odd size is reachable.
-
-
-Only the selected theme is rendered at full size, and the row thumbnails are
-rendered once at a fixed size, so moving the slider re-renders one theme rather
-than all sixty-nine.
-
-## Accents
-
-Six M3 tonal accents — Cyan, Purple, Green, Amber, Rose, Indigo — each with a
-light and a dark scheme. Picking one rebuilds the whole `MaterialPalette` scheme,
-not just the parts this app paints, so the vendored slider, switch and buttons
-re-tone with it.
-
-**Follow Omarchy theme** reads `accent` and `mode` from
-`~/.local/state/omarchy/current/theme/colors.toml` and snaps to the nearest of
-the six. It is a nearest-match, not a generated palette: Omarchy gives one accent
-hex, and deriving a full M3 tonal scheme from it would need a tonal-palette
-generator this app does not ship.
+The slider snaps to even sizes and the size buttons jump; `−` `+` and `[` `]`
+move a single pixel, so an odd size is reachable. The theme list's width is
+draggable and remembered in `$XDG_STATE_HOME/optination/ui.json`.
 
 ## Why
 
@@ -127,8 +162,8 @@ rather than fought with. After writing, `hyprctl reload` and
 `hyprctl configerrors` run, and a config error is reported instead of waiting to
 bite at next login.
 
-**Reset** puts back whatever was set when the app opened, so trying things on live
-is free.
+**Revert** (or Esc, or clicking outside the card) puts back whatever was set when
+the picker opened, so trying things on live is free.
 
 ## CLI
 
@@ -136,13 +171,19 @@ The thing this replaced was a shell function, and shell functions get called
 from scripts.
 
 ```
-optination                        open the picker
-optination --list                 every theme found: name, format, shape count
-optination --check [SIZE]         report which preview shapes a theme cannot draw
-optination --apply <THEME> [SIZE] apply for this session
-optination --save  <THEME> [SIZE] apply and persist
-optination --current              print the active theme and size
+optination                          open (or close) the picker overlay
+optination --list                   every theme found: name, format, shape count
+optination --check [SIZE]           report which preview shapes a theme cannot draw
+optination --apply <THEME> [SIZE]   apply for this session
+optination --save  <THEME> [SIZE]   apply and persist
+optination --current                print the active theme and size
+optination --render <THEME> <SIZE>  render the six preview shapes to the cache
+optination --thumbs                 render every theme's list thumbnail to the cache
+optination --stale                  report a stale XCURSOR_* line in hyprland.conf
 ```
+
+Add `--json` to `--list`, `--current`, `--render`, `--thumbs` or `--stale` for
+the machine format the overlay reads.
 
 `--check` reports gaps in the *themes*, not in optination — a theme with no
 `wait`/`watch` shape will fall back to another theme's at runtime, and this is
@@ -150,28 +191,28 @@ how you find that out before you commit to it.
 
 ## Build
 
-CI builds every push and uploads a Linux x86-64 binary as the
-`optination-linux-x86_64` artifact. To build locally instead:
+CI builds every push and uploads the `optination-linux-x86_64` artifact: the
+binary, `qml/`, `share/` and `install.sh`. Unpack it and run:
 
 ```sh
-cargo build --release
-install -Dm755 target/release/optination ~/.local/bin/optination
+./install.sh
 ```
 
-To get it into the application launcher, install the desktop entry and icon
-from `share/` as well:
+That puts the binary in `~/.local/bin`, the QML in
+`~/.local/share/optination/qml`, and the desktop entry and icon where the
+launcher finds them. On Omarchy it also links the QML in as the plugin
+`io.github.lubabs770.optination` and enables it. From a checkout, build with
+`cargo build --release` first; `install.sh` picks up `target/release/optination`.
 
-```sh
-install -Dm644 share/optination.desktop ~/.local/share/applications/optination.desktop
-install -Dm644 share/optination.svg ~/.local/share/icons/hicolor/scalable/apps/optination.svg
-update-desktop-database ~/.local/share/applications
+To open it from a key, bind `optination` — e.g. in `~/.config/hypr/bindings.lua`
+on Omarchy — or add a row to `~/.config/omarchy/extensions/omarchy-menu.jsonc`:
+
+```jsonc
+"style.cursor": {"icon":"󰇀","label":"Cursor","action":"optination"}
 ```
 
-The entry's `StartupWMClass` is `optination`, matching the xdg app id the app
-sets at startup, so the window carries the icon and is targetable by
-`windowrule` on that class.
-
-No system libraries beyond Wayland and a GPU driver. Xcursor parsing via
+Runtime needs: Quickshell (Omarchy ships it; elsewhere `pacman -S quickshell`),
+`hyprctl`, `gsettings`, and `wl-copy` for the copy button. Xcursor parsing via
 `xcursor`, SVG via `resvg`, PNG via `png`, hyprcursor archives via `zip`.
 
 ## Notes
@@ -183,5 +224,4 @@ No system libraries beyond Wayland and a GPU driver. Xcursor parsing via
 
 ## License
 
-MIT. The vendored `material-1.0/` directory is MIT, copyright SixtyFPS GmbH — see
-`material-1.0/LICENSE.md`.
+MIT.

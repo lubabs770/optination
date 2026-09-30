@@ -1,7 +1,7 @@
 //! Decoding cursor shapes to RGBA bitmaps for on-screen preview.
 //!
-//! Both formats hand back *premultiplied* RGBA, which is what Slint's
-//! `from_rgba8_premultiplied` wants — do not "fix" this to plain RGBA or every
+//! Both formats hand back *premultiplied* RGBA; `cache` converts to straight
+//! alpha when it writes PNGs — do not "fix" it here, or every
 //! anti-aliased edge picks up a dark halo.
 
 use std::io::Read;
