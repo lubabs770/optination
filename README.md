@@ -10,6 +10,30 @@ the live pointer the moment you click it, and only writes to disk when you say s
 
 ![optination](preview.png)
 
+## Install
+
+Download the latest release and run its installer (x86-64 Linux):
+
+```sh
+curl -L https://github.com/lubabs770/optination/releases/latest/download/optination-linux-x86_64.tar.gz | tar xz
+./optination/install.sh
+```
+
+That installs the `optination` binary to `~/.local/bin` and the overlay to
+`~/.local/share/optination`, and on Omarchy links it in as the plugin
+`io.github.lubabs770.optination` and enables it. Then run `optination`, or bind
+it to a key (see [Build](#build)).
+
+**Installed from the Omarchy plugin marketplace?** `omarchy plugin add` brings
+the overlay only. Run the two lines above as well to get the engine binary it
+drives. The installer leaves a plugin folder it didn't create alone, so this
+is safe.
+
+**Removing:** `omarchy plugin remove io.github.lubabs770.optination`, then
+`rm ~/.local/bin/optination` and `rm -r ~/.local/share/optination ~/.cache/optination`.
+A saved cursor stays in the marked block in `~/.config/hypr/looknfeel.lua`
+until you delete it.
+
 ## One overlay, two hosts
 
 The picker is a single QML overlay (`qml/Picker.qml`) run by
@@ -191,18 +215,15 @@ how you find that out before you commit to it.
 
 ## Build
 
-CI builds every push and uploads the `optination-linux-x86_64` artifact: the
-binary, `qml/`, `share/` and `install.sh`. Unpack it and run:
+CI builds every push and uploads the `optination-linux-x86_64` bundle: the
+binary, `manifest.json`, `qml/`, `share/` and `install.sh`. Pushing a `v*` tag
+also publishes that bundle as a GitHub release, which is what the
+[Install](#install) lines download.
 
-```sh
-./install.sh
-```
-
-That puts the binary in `~/.local/bin`, the QML in
-`~/.local/share/optination/qml`, and the desktop entry and icon where the
-launcher finds them. On Omarchy it also links the QML in as the plugin
-`io.github.lubabs770.optination` and enables it. From a checkout, build with
-`cargo build --release` first; `install.sh` picks up `target/release/optination`.
+From a checkout, build with `cargo build --release`, then run `./install.sh`,
+which picks up `target/release/optination`. It puts the binary in
+`~/.local/bin`, the plugin folder in `~/.local/share/optination`, and the desktop
+entry and icon where the launcher finds them.
 
 To open it from a key, bind `optination` — e.g. in `~/.config/hypr/bindings.lua`
 on Omarchy — or add a row to `~/.config/omarchy/extensions/omarchy-menu.jsonc`:
