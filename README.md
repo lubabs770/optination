@@ -12,12 +12,22 @@ the live pointer the moment you click it, and only writes to disk when you say s
 
 ## Install
 
-Download the latest release and run its installer (x86-64 Linux):
+Download the v0.2.2 release, check it against the published SHA-256, then run
+its installer (x86-64 Linux):
 
 ```sh
-curl -L https://github.com/lubabs770/optination/releases/latest/download/optination-linux-x86_64.tar.gz | tar xz
+curl -fLO https://github.com/lubabs770/optination/releases/download/v0.2.2/optination-linux-x86_64.tar.gz
+echo "9cade6a4e5faf8b8222a9239a0e781a5b349f677d01f8000aabce2cbf6a3d164  optination-linux-x86_64.tar.gz" | sha256sum -c
+tar xzf optination-linux-x86_64.tar.gz
 ./optination/install.sh
 ```
+
+`sha256sum -c` stops with `FAILED` if the download is not the reviewed build;
+don't run the installer then. Releases are
+[immutable](https://docs.github.com/en/code-security/supply-chain-security/understanding-your-software-supply-chain/immutable-releases),
+so this tag and its asset can't be replaced after publishing. With `gh`, you can
+also check the file against GitHub's release attestation:
+`gh release verify-asset v0.2.2 optination-linux-x86_64.tar.gz -R lubabs770/optination`.
 
 That installs the `optination` binary to `~/.local/bin` and the overlay to
 `~/.local/share/optination`, and on Omarchy links it in as the plugin
@@ -25,7 +35,7 @@ That installs the `optination` binary to `~/.local/bin` and the overlay to
 it to a key (see [Build](#build)).
 
 **Installed from the Omarchy plugin marketplace?** `omarchy plugin add` brings
-the overlay only. Run the two lines above as well to get the engine binary it
+the overlay only. Run the lines above as well to get the engine binary it
 drives. The installer leaves a plugin folder it didn't create alone, so this
 is safe.
 
@@ -217,8 +227,9 @@ how you find that out before you commit to it.
 
 CI builds every push and uploads the `optination-linux-x86_64` bundle: the
 binary, `manifest.json`, `qml/`, `share/` and `install.sh`. Pushing a `v*` tag
-also publishes that bundle as a GitHub release, which is what the
-[Install](#install) lines download.
+also publishes that bundle as an immutable GitHub release. The
+[Install](#install) lines pin one release by tag and SHA-256; a new release
+updates both in the README.
 
 From a checkout, build with `cargo build --release`, then run `./install.sh`,
 which picks up `target/release/optination`. It puts the binary in
