@@ -1,6 +1,6 @@
 [package]
 name = "optination"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 description = "A cursor theme picker overlay for Hyprland that shows you the cursors"
 license = "MIT"
