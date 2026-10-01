@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.lubabs770.optination",
   "name": "optination",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "author": "lubabs770",
   "description": "Pick a cursor theme and size, with live previews",
   "kinds": [
