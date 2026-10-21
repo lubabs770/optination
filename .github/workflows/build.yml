@@ -44,6 +44,7 @@ jobs:
           $bin --list --json | jq -e 'type == "array"'
           XDG_CACHE_HOME="$RUNNER_TEMP/cache" $bin --thumbs --json | jq -e 'type == "array"'
           $bin --stale --json | jq -e 'has("path")'
+          $bin --current --json | jq -e 'has("saved")'
 
       - name: Smoke test rendering against a real theme
         run: |

@@ -126,7 +126,7 @@ fn manifest(dir: &Path) -> Option<PathBuf> {
         .find(|p| p.is_file())
 }
 
-fn classify(dir: &Path) -> Option<Format> {
+pub fn classify(dir: &Path) -> Option<Format> {
     let x11 = dir.join("cursors").is_dir();
     let hypr = dir.join("hyprcursors").is_dir() && manifest(dir).is_some();
     match (x11, hypr) {

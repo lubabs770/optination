@@ -58,7 +58,11 @@ pub fn current() -> (Option<String>, Option<u32>) {
     (get("cursor-theme"), get("cursor-size").and_then(|s| s.parse().ok()))
 }
 
+/// `OPTINATION_LOOKNFEEL` points the engine at another file, for tests.
 pub fn config_path() -> PathBuf {
+    if let Some(path) = std::env::var_os("OPTINATION_LOOKNFEEL") {
+        return PathBuf::from(path);
+    }
     let base = dirs::home_dir().unwrap_or_default().join(".config/hypr");
     base.join("looknfeel.lua")
 }
@@ -181,6 +185,25 @@ pub fn persist(theme: &str, size: u32) -> Result<PathBuf, String> {
     Ok(path)
 }
 
+/// What the managed block in `looknfeel.lua` sets — the cursor the next login
+/// gets. `None` when there is no block, or it was hand-edited past reading.
+pub fn saved() -> Option<(String, u32)> {
+    let text = std::fs::read_to_string(config_path()).ok()?;
+    let start = text.find(BEGIN)?;
+    let end = start + text[start..].find(END)?;
+    let block = &text[start..end];
+    // The value of `hl.env("KEY", "value")`, for the plain names `persist` writes.
+    let value = |key: &str| -> Option<String> {
+        let line = block.lines().find(|l| l.trim_start().starts_with(&format!("hl.env(\"{key}\"")))?;
+        let rest = line.split_once(',')?.1.trim();
+        let inner = rest.strip_prefix('"')?.split_once('"')?.0;
+        (!inner.contains('\\')).then(|| inner.to_string())
+    };
+    let theme = value("XCURSOR_THEME").or_else(|| value("HYPRCURSOR_THEME"))?;
+    let size = value("XCURSOR_SIZE").and_then(|s| s.parse().ok()).unwrap_or(24);
+    safe_name(&theme).then_some((theme, size))
+}
+
 /// Whether a stale `env = XCURSOR_*` line is still sitting in the inert
 /// `hyprland.conf`. Harmless, but it is a lie about what the system is doing,
 /// so the UI points it out.
@@ -265,6 +288,19 @@ mod tests {
         assert!(block.contains(r#"hl.env("XCURSOR_THEME", "Bibata-Modern-Ice")"#));
         assert!(block.contains(r#"hl.env("HYPRCURSOR_SIZE", "24")"#));
         assert_eq!(block.lines().count(), 7);
+    }
+
+    #[test]
+    fn saved_reads_back_what_managed_block_writes() {
+        let path = std::env::temp_dir().join(format!("optination-saved-{}.lua", std::process::id()));
+        std::fs::write(&path, format!("-- mine\n{}-- after\n", managed_block("Bibata-Modern-Ice", 30))).unwrap();
+        // SAFETY: tests touching this variable run in this one test only.
+        unsafe { std::env::set_var("OPTINATION_LOOKNFEEL", &path) };
+        assert_eq!(saved(), Some(("Bibata-Modern-Ice".into(), 30)));
+        std::fs::write(&path, "hl.env(\"XCURSOR_THEME\", \"Loose\")\n").unwrap();
+        assert_eq!(saved(), None, "only the managed block counts");
+        unsafe { std::env::remove_var("OPTINATION_LOOKNFEEL") };
+        std::fs::remove_file(path).unwrap();
     }
 
     #[test]

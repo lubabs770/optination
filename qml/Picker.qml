@@ -8,8 +8,13 @@ import Quickshell.Io
 // binary for theme data, rendered shapes and applying a choice.
 //
 // Clicking a theme or changing the size applies it live (session only), the
-// way the old app did. Apply persists it; Esc / Revert puts back what was
+// way the old app did. Save persists it; Esc / Revert puts back what was
 // active when the picker opened.
+//
+// Three cursors are in play and the UI names each one: what is *saved* (what
+// the next login gets), what is *live* (on the pointer right now) and what is
+// *selected* in the list. A status strip under the header shows saved vs.
+// live at all times, so trying themes on never hides what you started from.
 Item {
   id: root
 
@@ -55,6 +60,16 @@ Item {
   property int size: 24
   property string originalTheme: ""
   property int originalSize: 24
+  // What looknfeel.lua's managed block sets; "" when nothing is saved.
+  property string savedTheme: ""
+  property int savedSize: 0
+  // What the last successful apply put on the pointer.
+  property string liveTheme: ""
+  property int liveSize: 0
+  property string tab: "installed"
+  // A remove waits for a second click on the same theme.
+  property string removeArmed: ""
+  property string notice: ""
   property string stalePath: ""
   property string error: ""
   property bool copied: false
@@ -68,6 +83,10 @@ Item {
   readonly property var visibleThemes: filterThemes(themes, query, filters)
   readonly property var selectedTheme: themes.find(t => t.name === selected) || null
   readonly property string command: "hyprctl setcursor " + selected + " " + size
+  readonly property bool hasSaved: savedTheme !== ""
+  readonly property bool liveIsSaved: liveTheme === savedTheme && liveSize === savedSize
+  readonly property bool selectionIsSaved: selected === savedTheme && size === savedSize
+  readonly property bool selectionChanged: selected !== originalTheme || size !== originalSize
 
   // Chips inside a group are OR-ed, groups are AND-ed, so "hyprcursor" plus
   // "dark" narrows to dark hyprcursor themes rather than to nothing.
@@ -118,8 +137,13 @@ Item {
     let parts = [t.format, t.shapes + " shapes"]
     if (t.tone) parts.push(t.tone)
     if (t.mirrored) parts.push("mirrored")
-    if (t.userInstalled) parts.push("user")
+    if (t.fromStore) parts.push("from catalog")
+    else if (t.userInstalled) parts.push("user")
     return parts.join(" · ")
+  }
+
+  function describe(theme, px) {
+    return theme ? theme + " · " + px + " px" : "—"
   }
 
   function clampSize(v) {
@@ -147,9 +171,11 @@ Item {
 
   function start() {
     error = ""
+    notice = ""
     query = ""
     searching = false
     copied = false
+    removeArmed = ""
     Quickshell.execDetached(["mkdir", "-p", stateDir])
     if (engine) load()
     else resolveProc.running = true
@@ -158,9 +184,52 @@ Item {
 
   function load() {
     currentProc.running = true
+    reloadThemes()
+    staleProc.running = true
+  }
+
+  // After an install or remove: the list, its thumbnails, and the badges.
+  function reloadThemes() {
     listProc.running = true
     thumbsProc.running = true
-    staleProc.running = true
+  }
+
+  // A theme just arrived from the catalog: put it on the pointer.
+  function tryInstalled(name) {
+    pendingTry = name
+    reloadThemes()
+  }
+  property string pendingTry: ""
+
+  function focusKeys() {
+    keys.forceActiveFocus()
+  }
+
+  function jumpToSaved() {
+    if (!hasSaved) return
+    tab = "installed"
+    if (savedTheme !== selected) {
+      selected = savedTheme
+      requestPreview()
+    }
+    if (size !== savedSize) size = clampSize(savedSize)
+    applyDebounce.restart()
+    revealSelected()
+  }
+
+  function removeSelected() {
+    const t = selectedTheme
+    if (!t || !t.userInstalled || removeProc.running) return
+    if (removeArmed !== t.name) {
+      removeArmed = t.name
+      removeDisarm.restart()
+      return
+    }
+    removeArmed = ""
+    error = ""
+    removeProc.target = t.name
+    removeProc.command = [engine, "--remove", t.name]
+    removeProc.running = true
   }
 
   // Put back what was active when the picker opened. Safe to call twice.
@@ -170,6 +239,8 @@ Item {
     if (selected === originalTheme && size === originalSize) return
     selected = originalTheme
     size = originalSize
+    liveTheme = originalTheme
+    liveSize = originalSize
     Quickshell.execDetached([engine, "--apply", originalTheme, String(originalSize)])
   }
 
@@ -189,6 +260,7 @@ Item {
   function pick(name) {
     if (name === selected) return
     selected = name
+    removeArmed = ""
     requestPreview()
     applyDebounce.restart()
   }
@@ -245,6 +317,8 @@ Item {
       applyPending = true
       return
     }
+    applyProc.theme = selected
+    applyProc.px = size
     applyProc.command = [engine, "--apply", selected, String(size)]
     applyProc.running = true
   }
@@ -267,6 +341,10 @@ Item {
     return t && typeof t.name === "string" && t.name.length > 0 && t.name.length < 256
       && typeof t.comment === "string" && typeof t.format === "string"
       && typeof t.tone === "string" && typeof t.shapes === "number"
+  }
+
+  function isSafeTheme(name) {
+    return typeof name === "string" && name.length > 0 && name.length < 256 && !name.includes("\n")
   }
 
   // ----------------------------------------------------------- processes ---
@@ -296,9 +374,14 @@ Item {
     stdout: StdioCollector {
       onStreamFinished: {
         const cur = root.parse(text, {}, root.maxSmallBytes)
-        root.originalTheme = typeof cur.theme === "string" ? cur.theme : ""
+        root.originalTheme = root.isSafeTheme(cur.theme) ? cur.theme : ""
         root.originalSize = root.clampSize(typeof cur.size === "number" ? cur.size : 24)
         root.size = root.originalSize
+        root.liveTheme = root.originalTheme
+        root.liveSize = root.originalSize
+        const saved = cur.saved && typeof cur.saved === "object" ? cur.saved : {}
+        root.savedTheme = root.isSafeTheme(saved.theme) ? saved.theme : ""
+        root.savedSize = typeof saved.size === "number" ? saved.size : 0
         if (root.originalTheme) root.selected = root.originalTheme
         else if (!root.selected && root.themes.length > 0) root.selected = root.themes[0].name
         root.revealSelected()
@@ -319,6 +402,11 @@ Item {
         // Only fall back to the first theme once the active one is known to be unknown.
         if (!root.selected && !currentProc.running && root.themes.length > 0)
           root.selected = root.themes[0].name
+        if (root.pendingTry && root.themes.some(t => t.name === root.pendingTry)) {
+          root.pick(root.pendingTry)
+          root.notice = "installed " + root.pendingTry
+        }
+        root.pendingTry = ""
         root.revealSelected()
         root.requestPreview()
       }
@@ -374,10 +462,16 @@ Item {
 
   Process {
     id: applyProc
+    property string theme: ""
+    property int px: 0
     stderr: StdioCollector {
       onStreamFinished: root.error = root.oneLine(text)
     }
-    onExited: {
+    onExited: function(code) {
+      if (code === 0) {
+        root.liveTheme = theme
+        root.liveSize = px
+      }
       if (root.applyPending) {
         root.applyPending = false
         root.applyNow()
@@ -394,6 +488,8 @@ Item {
       if (code === 0) {
         root.originalTheme = root.selected
         root.originalSize = root.size
+        root.savedTheme = root.selected
+        root.savedSize = root.size
         root.dismissed()
       } else {
         root.error = root.oneLine(saveErr.text) || "saving failed"
@@ -401,6 +497,34 @@ Item {
     }
   }
 
+  Process {
+    id: removeProc
+    property string target: ""
+    stderr: StdioCollector { id: removeErr }
+    onExited: function(code) {
+      if (code !== 0) {
+        root.error = root.oneLine(removeErr.text) || "removing failed"
+        return
+      }
+      root.notice = "removed " + target
+      // Never leave the pointer on a theme that no longer exists.
+      if (root.liveTheme === target || root.originalTheme === target) {
+        const back = root.savedTheme || (root.themes.find(t => t.name !== target) || {}).name || ""
+        if (back) {
+          root.originalTheme = back
+          root.originalSize = root.savedSize || root.size
+          root.selected = back
+          root.size = root.clampSize(root.originalSize)
+          root.applyNow()
+        }
+      } else if (root.selected === target) {
+        root.selected = root.liveTheme
+      }
+      root.reloadThemes()
+    }
+  }
+
+  Timer { id: removeDisarm; interval: 3000; onTriggered: root.removeArmed = "" }
   Timer { id: renderDebounce; interval: 40; onTriggered: root.renderNow() }
   Timer { id: applyDebounce; interval: 120; onTriggered: root.applyNow() }
   Timer { id: copyReset; interval: 1400; onTriggered: root.copied = false }
@@ -426,8 +550,17 @@ Item {
       const text = event.text
       if (key === Qt.Key_Escape) {
         root.revert()
+      } else if (key === Qt.Key_Tab || key === Qt.Key_Backtab) {
+        root.tab = root.tab === "installed" ? "browse" : "installed"
+        if (root.tab === "browse") store.opened()
+      } else if (root.tab === "browse") {
+        if (!store.handleKey(event)) return
       } else if (key === Qt.Key_Return || key === Qt.Key_Enter) {
         root.save()
+      } else if (text === "c") {
+        root.jumpToSaved()
+      } else if (key === Qt.Key_Delete) {
+        root.removeSelected()
       } else if (text === "/") {
         root.searching = true
         search.forceActiveFocus()
@@ -493,12 +626,47 @@ Item {
           font.pixelSize: 14
           font.bold: true
         }
-        Text {
-          textFormat: Text.PlainText
-          text: "cursor themes · " + root.themes.length + " installed"
-          color: root.tokens.muted
-          font.family: root.font
-          font.pixelSize: 13
+        Row {
+          spacing: 0
+          Repeater {
+            model: [["installed", "installed · " + root.themes.length], ["browse", "browse online"]]
+            delegate: Item {
+              id: tabItem
+              required property var modelData
+              readonly property bool active: root.tab === modelData[0]
+              width: tabLabel.implicitWidth + 28
+              height: 48
+              Text {
+                id: tabLabel
+                textFormat: Text.PlainText
+                anchors.centerIn: parent
+                text: tabItem.modelData[1]
+                color: tabItem.active ? root.fg : tabMouse.containsMouse ? root.tint(root.fg, 0.8) : root.tokens.muted
+                font.family: root.font
+                font.pixelSize: 13
+                font.bold: tabItem.active
+              }
+              Rectangle {
+                anchors.bottom: parent.bottom
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: parent.width - 12
+                height: 2
+                color: root.tokens.accent
+                visible: tabItem.active
+              }
+              MouseArea {
+                id: tabMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                  root.tab = tabItem.modelData[0]
+                  if (root.tab === "browse") store.opened()
+                  keys.forceActiveFocus()
+                }
+              }
+            }
+          }
         }
         Text {
           textFormat: Text.PlainText
@@ -513,7 +681,9 @@ Item {
         }
         Item { Layout.fillWidth: true }
         Repeater {
-          model: [["/", "search"], ["j k", "browse"], ["[ ]", "size"], ["enter", "apply"], ["esc", "revert"]]
+          model: root.tab === "installed"
+            ? [["tab", "browse online"], ["/", "search"], ["j k", "move"], ["[ ]", "size"], ["c", "saved"], ["del", "remove"], ["enter", "save"], ["esc", "revert"]]
+            : [["tab", "installed"], ["/", "search"], ["j k", "move"], ["enter", "install"], ["esc", "close"]]
           delegate: Row {
             required property var modelData
             spacing: 6
@@ -548,7 +718,105 @@ Item {
 
       Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: root.line }
 
+      // ---------------------------------------------- status strip ---
+      // Saved vs. live, always on screen: trying themes on should never make
+      // you lose track of what you had.
+      Rectangle {
+        Layout.fillWidth: true
+        Layout.preferredHeight: 44
+        color: root.faint
+
+        RowLayout {
+          anchors.fill: parent
+          anchors.leftMargin: 20
+          anchors.rightMargin: 20
+          spacing: 10
+
+          Badge {
+            ui: root
+            label: root.liveIsSaved && root.hasSaved ? "saved · live" : "saved"
+            filled: true
+          }
+          Text {
+            textFormat: Text.PlainText
+            text: root.hasSaved ? root.describe(root.savedTheme, root.savedSize)
+              : "nothing saved — login uses the system default"
+            color: root.hasSaved ? root.fg : root.tokens.muted
+            font.family: root.font
+            font.pixelSize: 13
+            MouseArea {
+              anchors.fill: parent
+              enabled: root.hasSaved
+              cursorShape: Qt.PointingHandCursor
+              onClicked: root.jumpToSaved()
+            }
+          }
+
+          Text {
+            textFormat: Text.PlainText
+            visible: !root.liveIsSaved || !root.hasSaved
+            text: "→"
+            color: root.tokens.muted
+            font.family: root.font
+            font.pixelSize: 13
+          }
+          Badge {
+            ui: root
+            visible: !root.liveIsSaved || !root.hasSaved
+            label: "live now"
+          }
+          Text {
+            textFormat: Text.PlainText
+            visible: !root.liveIsSaved || !root.hasSaved
+            text: root.describe(root.liveTheme, root.liveSize)
+            color: root.fg
+            font.family: root.font
+            font.pixelSize: 13
+          }
+          Text {
+            textFormat: Text.PlainText
+            text: root.liveIsSaved && root.hasSaved ? "✓ nothing unsaved" : "● not saved — enter saves, esc reverts"
+            color: root.liveIsSaved && root.hasSaved ? root.tokens.muted : root.tokens.accent
+            font.family: root.font
+            font.pixelSize: 12
+          }
+
+          Item { Layout.fillWidth: true }
+
+          Text {
+            textFormat: Text.PlainText
+            Layout.fillWidth: true
+            Layout.maximumWidth: implicitWidth
+            visible: root.notice !== ""
+            text: root.notice
+            color: root.tokens.muted
+            font.family: root.font
+            font.pixelSize: 12
+            elide: Text.ElideRight
+          }
+          Text {
+            textFormat: Text.PlainText
+            visible: root.notice === "" && root.originalTheme !== "" && root.originalTheme !== root.savedTheme
+            text: "esc goes back to " + root.describe(root.originalTheme, root.originalSize)
+            color: root.tokens.muted
+            font.family: root.font
+            font.pixelSize: 12
+          }
+        }
+      }
+
+      Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: root.line }
+
+      Store {
+        id: store
+        ui: root
+        visible: root.tab === "browse"
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+      }
+
       RowLayout {
+        visible: root.tab === "installed"
         Layout.fillWidth: true
         Layout.fillHeight: true
         spacing: 0
@@ -734,23 +1002,18 @@ Item {
                   }
                 }
 
-                Rectangle {
-                  visible: row.modelData.name === root.originalTheme
-                  Layout.preferredWidth: inUse.implicitWidth + 12
-                  Layout.preferredHeight: inUse.implicitHeight + 4
-                  color: "transparent"
-                  border.width: 1
-                  border.color: root.tint(root.fg, 0.35)
-                  radius: root.tokens.radius
-                  Text {
-                    id: inUse
-                    textFormat: Text.PlainText
-                    anchors.centerIn: parent
-                    text: "in use"
-                    color: root.tokens.muted
-                    font.family: root.font
-                    font.pixelSize: 10
-                  }
+                Badge {
+                  ui: root
+                  visible: row.modelData.name === root.liveTheme && root.liveTheme !== root.savedTheme
+                  label: "live"
+                  small: true
+                }
+                Badge {
+                  ui: root
+                  visible: row.modelData.name === root.savedTheme
+                  label: row.modelData.name === root.liveTheme ? "saved · live" : "saved"
+                  filled: true
+                  small: true
                 }
               }
 
@@ -884,6 +1147,15 @@ Item {
                 color: root.fg
                 font.family: root.font
                 font.pixelSize: 13
+              }
+              Badge {
+                ui: root
+                visible: root.selected !== ""
+                small: true
+                filled: root.selectionIsSaved
+                label: root.selectionIsSaved ? "saved"
+                  : root.selected === root.liveTheme && root.size === root.liveSize ? "on your pointer · not saved"
+                  : "applying…"
               }
               Text {
                 textFormat: Text.PlainText
@@ -1157,14 +1429,23 @@ Item {
             Item { Layout.fillWidth: root.error === "" }
             FlatButton {
               ui: root
-              label: "revert"
+              visible: root.selectedTheme !== null && root.selectedTheme.userInstalled
+              label: removeProc.running ? "removing…"
+                : root.removeArmed === root.selected ? "click again to delete" : "remove"
+              danger: root.removeArmed === root.selected
+              Accessible.name: "Remove this theme from your home folder"
+              onActivated: root.removeSelected()
+            }
+            FlatButton {
+              ui: root
+              label: root.selectionChanged ? "revert to " + root.originalTheme : "close"
               onActivated: root.revert()
             }
             FlatButton {
               ui: root
-              label: saveProc.running ? "saving…" : "apply"
-              primary: true
-              onActivated: root.save()
+              label: saveProc.running ? "saving…" : root.selectionIsSaved ? "saved ✓" : "save for login"
+              primary: !root.selectionIsSaved
+              onActivated: root.selectionIsSaved ? root.dismissed() : root.save()
             }
           }
         }

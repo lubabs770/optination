@@ -8,6 +8,11 @@ theme on the system with its actual pointer, I-beam, hand, resize, busy and
 no-drop shapes rendered at the size you are about to use, applies your pick to
 the live pointer the moment you click it, and only writes to disk when you say so.
 
+It also browses the [pling / gnome-look](https://www.pling.com/browse?cat=107)
+cursor catalog — about 1,200 themes — and installs any of them into
+`~/.local/share/icons` with one key, putting the new theme straight on your
+pointer to try.
+
 ![optination](preview.png)
 
 ## Install
@@ -79,14 +84,16 @@ omarchy plugin remove io.github.lubabs770.optination   # unlinks; nothing else i
 ```
 
 **What it writes:** nothing on open or while browsing except the live pointer
-(`hyprctl setcursor`, `gsettings`). **Apply** writes the marked block in
+(`hyprctl setcursor`, `gsettings`). Installing from the catalog writes the
+theme to `~/.local/share/icons` and stages downloads in
+`$XDG_CACHE_HOME/optination/downloads` (cleared afterwards). **Save for login** (Enter) writes the marked block in
 `looknfeel.lua` described under *Applying*. Its own files are a PNG cache in
 `$XDG_CACHE_HOME/optination/` and the list width in
 `$XDG_STATE_HOME/optination/ui.json`. It never edits keybindings or menu
 extensions.
 
 **Trust boundary:** everything read from the engine is size-capped and
-shape-checked before use, images load only from its own cache directory, all
+shape-checked before use, images load only from its own cache directory (or, in the browse tab, pling's https image host), all
 text renders as plain text, and every command runs as an argument vector — no
 shell strings built from theme names.
 
@@ -94,19 +101,81 @@ shell strings built from theme names.
 Omarchy's own overlays it does not respond to Super+W: Hyprland handles that
 bind as *close window* before the overlay sees the key.
 
+## Saved vs. live
+
+Browsing changes the pointer as you go, which used to make it easy to lose
+track of what you started with. A strip under the header always shows both:
+
+- **saved** — what the next login gets (the managed block in `looknfeel.lua`)
+- **live now** — what is on the pointer at this moment, marked *not saved*
+  when it differs
+
+List rows carry the same `saved` / `live` badges, the preview names the state
+of the theme you are looking at, `c` jumps back to the saved theme, and the
+buttons say what they will do (`revert to macOS-hypr`, `save for login`).
+
 ## Keys
 
-| Key | Does |
-|---|---|
-| `/` | search (Enter or Esc to leave the field) |
-| `j` `k` / `↓` `↑` | browse; the pointer under your hand follows |
-| `[` `]` | size −1 / +1 px |
-| Enter | apply and persist |
-| Esc | revert to what was active when it opened, and close |
+| Key | Installed tab | Browse tab |
+|---|---|---|
+| Tab | switch to browse | switch to installed |
+| `/` | search installed themes | search the catalog |
+| `j` `k` / `↓` `↑` | move; the pointer under your hand follows | move |
+| `h` `l` / `←` `→` | — | flip through preview pictures |
+| `[` `]` | size −1 / +1 px | — |
+| `c` | jump back to the saved theme | — |
+| Del | remove a theme from your home folder (press twice) | — |
+| `o` | — | open the item on pling.com |
+| Enter | save for login | install the recommended variant, or try it if installed |
+| Esc | revert to what was active when it opened, and close | same |
 
 The slider snaps to even sizes and the size buttons jump; `−` `+` and `[` `]`
 move a single pixel, so an odd size is reachable. The theme list's width is
 draggable and remembered in `$XDG_STATE_HOME/optination/ui.json`.
+
+## Browsing and installing
+
+The **browse online** tab reads the OpenDesktop OCS API (category 107,
+*Cursors* — the same catalog gnome-look.org and KDE's "Get New Cursors"
+use). Search, sort by downloads / rating / newest / name, scroll for more.
+Each item lists the downloads that can be a Linux cursor theme; Windows,
+macOS (`.cape`) and image-only bundles are hidden and counted. The
+recommended variant is the plain tarball (`Nordzy-cursors.tar.gz` over
+`Nordzy-cursors-lefthand.tar.gz`), and Enter installs it.
+
+An installed theme goes on the pointer immediately, unsaved — Enter saves it,
+Esc puts back what you had. Items already on disk are badged *installed*,
+whether optination installed them or you did.
+
+Installing handles untrusted archives, so it is strict:
+
+- downloads go through `curl`, **https only** (redirects too), with
+  `~/.curlrc` ignored, capped at 200 MB and timed out; when the catalog
+  lists an md5 the file must match it — that catches a corrupt or truncated
+  download, not a malicious one, since the sum comes from the same catalog;
+- the archive is listed before unpacking and refused past 40,000 entries or
+  600 MB unpacked;
+- `bsdtar` unpacks it into an empty, owner-only staging folder, with its
+  default refusal of `..` and absolute paths left on, and without owners,
+  ACLs or xattrs;
+- only folders that are cursor themes are kept, and only if everything in
+  them is a plain file, a folder, or a symlink that stays inside the theme;
+- every installed file is made `0644` and every folder `0755`, so nothing a
+  theme ships is left executable, and nothing from the archive is ever run;
+- the theme name must pass the same check `--save` applies;
+- an existing theme of the same name is never overwritten unless optination
+  installed it (it leaves `.optination-source.json` in the themes it installs).
+
+Cursor themes are data — Xcursor images, SVGs, PNGs and an `index.theme` —
+and optination only ever reads them. What you install is still third-party
+content from the catalog, which optination does not vet; the browse tab is
+there so you can look before you install.
+
+Preview pictures load only from `https://images.pling.com/`, fetched by the
+shell itself (Qt's image loader), so browsing makes network requests from
+the shell process; the installed tab makes none. Remove a theme
+with Del in the installed tab or `optination --remove`; system themes and the
+saved theme are refused.
 
 ## Why
 
@@ -178,7 +247,7 @@ Three consumers need telling, and none of them covers the others:
 | `hl.env("XCURSOR_THEME", …)` in `~/.config/hypr/looknfeel.lua` | every client's environment | permanent |
 
 Clicking a theme does the first two, so the pointer under your hand changes while
-you browse. **Apply** adds the third, writing a marked block:
+you browse. **Save for login** (Enter) adds the third, writing a marked block:
 
 ```lua
 -- >>> optination (managed block) >>>
@@ -214,9 +283,14 @@ optination --current                print the active theme and size
 optination --render <THEME> <SIZE>  render the six preview shapes to the cache
 optination --thumbs                 render every theme's list thumbnail to the cache
 optination --stale                  report a stale XCURSOR_* line in hyprland.conf
+optination --store [QUERY] [--page N] [--sort downloads|rating|new|name]
+                                    search the online catalog
+optination --install <ID> [FILE]    install catalog item ID (default: its recommended file)
+optination --remove <THEME>         delete a theme installed under your home
 ```
 
-Add `--json` to `--list`, `--current`, `--render`, `--thumbs` or `--stale` for
+`--current` prints what is live and what is saved. Add `--json` to `--list`,
+`--current`, `--render`, `--thumbs`, `--stale`, `--store` or `--install` for
 the machine format the overlay reads.
 
 `--check` reports gaps in the *themes*, not in optination — a theme with no
@@ -244,7 +318,8 @@ on Omarchy — or add a row to `~/.config/omarchy/extensions/omarchy-menu.jsonc`
 ```
 
 Runtime needs: Quickshell (Omarchy ships it; elsewhere `pacman -S quickshell`),
-`hyprctl`, `gsettings`, and `wl-copy` for the copy button. Xcursor parsing via
+`hyprctl`, `gsettings`, `wl-copy` for the copy button, and `curl` + `bsdtar`
+(libarchive) for the browse tab. Xcursor parsing via
 `xcursor`, SVG via `resvg`, PNG via `png`, hyprcursor archives via `zip`.
 
 ## Notes
