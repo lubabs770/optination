@@ -17,12 +17,12 @@ pointer to try.
 
 ## Install
 
-Download the v0.2.2 release, check it against the published SHA-256, then run
+Download the v0.3.0 release, check it against the published SHA-256, then run
 its installer (x86-64 Linux):
 
 ```sh
-curl -fLO https://github.com/lubabs770/optination/releases/download/v0.2.2/optination-linux-x86_64.tar.gz
-echo "9cade6a4e5faf8b8222a9239a0e781a5b349f677d01f8000aabce2cbf6a3d164  optination-linux-x86_64.tar.gz" | sha256sum -c
+curl -fLO https://github.com/lubabs770/optination/releases/download/v0.3.0/optination-linux-x86_64.tar.gz
+echo "8cb013cdf6a6654f449ef2d0d38cc7b9c563d5dd83a0f5dc7fde4bc74f7a4e4d  optination-linux-x86_64.tar.gz" | sha256sum -c
 tar xzf optination-linux-x86_64.tar.gz
 ./optination/install.sh
 ```
@@ -32,7 +32,7 @@ don't run the installer then. Releases are
 [immutable](https://docs.github.com/en/code-security/supply-chain-security/understanding-your-software-supply-chain/immutable-releases),
 so this tag and its asset can't be replaced after publishing. With `gh`, you can
 also check the file against GitHub's release attestation:
-`gh release verify-asset v0.2.2 optination-linux-x86_64.tar.gz -R lubabs770/optination`.
+`gh release verify-asset v0.3.0 optination-linux-x86_64.tar.gz -R lubabs770/optination`.
 
 That installs the `optination` binary to `~/.local/bin` and the overlay to
 `~/.local/share/optination`, and on Omarchy links it in as the plugin
