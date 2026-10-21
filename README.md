@@ -135,6 +135,8 @@ draggable and remembered in `$XDG_STATE_HOME/optination/ui.json`.
 
 ## Browsing and installing
 
+![The browse online tab](screenshots/browse.png)
+
 The **browse online** tab reads the OpenDesktop OCS API (category 107,
 *Cursors* — the same catalog gnome-look.org and KDE's "Get New Cursors"
 use). Search, sort by downloads / rating / newest / name, scroll for more.
