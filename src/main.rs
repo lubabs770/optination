@@ -14,6 +14,7 @@ mod cli;
 mod launch;
 mod render;
 mod scan;
+mod store;
 
 fn main() {
     let code = cli::run().unwrap_or_else(launch::run);

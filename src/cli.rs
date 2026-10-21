@@ -10,7 +10,7 @@ use std::path::PathBuf;
 
 use serde::Serialize;
 
-use crate::{apply, cache, render, scan};
+use crate::{apply, cache, render, scan, store};
 
 const USAGE: &str = "\
 optination — pick a cursor theme, with previews
@@ -26,7 +26,16 @@ USAGE:
     optination --thumbs                 render every theme's list thumbnail to the cache
     optination --stale                  report a stale XCURSOR_* line in hyprland.conf
 
-    --json   machine-readable output for --list, --current, --render, --thumbs, --stale
+  Online catalog (pling / gnome-look, via curl):
+    optination --store [QUERY] [--page N] [--sort downloads|rating|new|name]
+                                        search cursor themes you can install
+    optination --install <ID> [FILE]    download catalog item ID (its FILE-th download,
+                                        default: the first Linux archive) into
+                                        ~/.local/share/icons
+    optination --remove <THEME>         delete a theme installed under your home
+
+    --json   machine-readable output for --list, --current, --render, --thumbs,
+             --stale, --store, --install
 
 Sizes default to the current cursor size.
 ";
@@ -43,6 +52,8 @@ struct ThemeJson<'a> {
     tone: &'static str,
     mirrored: bool,
     user_installed: bool,
+    /// Installed by optination from the online catalog.
+    from_store: bool,
     shapes: usize,
 }
 
@@ -57,6 +68,7 @@ impl<'a> ThemeJson<'a> {
             tone: theme.tone.label(),
             mirrored: theme.mirrored,
             user_installed: theme.user_installed,
+            from_store: store::source_of(&theme.path).is_some(),
             shapes: render::shape_count(theme),
         }
     }
@@ -64,8 +76,17 @@ impl<'a> ThemeJson<'a> {
 
 #[derive(Serialize)]
 struct CurrentJson {
+    /// Live in this session (gsettings, which every apply also sets).
     theme: Option<String>,
     size: Option<u32>,
+    /// What the next login gets: the managed block in looknfeel.lua.
+    saved: Option<SavedJson>,
+}
+
+#[derive(Serialize)]
+struct SavedJson {
+    theme: String,
+    size: u32,
 }
 
 #[derive(Serialize)]
@@ -136,15 +157,39 @@ fn dispatch(flag: &str, rest: &[String], json: bool) -> i32 {
         }
         "--current" => {
             let (theme, size) = apply::current();
+            let saved = apply::saved().map(|(theme, size)| SavedJson { theme, size });
             if json {
-                return print_json(&CurrentJson { theme, size });
+                return print_json(&CurrentJson { theme, size, saved });
             }
             println!(
                 "{} {}",
                 theme.unwrap_or_else(|| "unknown".into()),
                 size.map(|s| s.to_string()).unwrap_or_else(|| "?".into())
             );
+            match saved {
+                Some(s) => println!("saved: {} {}", s.theme, s.size),
+                None => println!("saved: nothing (no optination block in {})", apply::config_path().display()),
+            }
             0
+        }
+        "--store" => store_search(rest, json),
+        "--install" => install(rest, json),
+        "--remove" => {
+            let Some(name) = rest.first() else {
+                eprintln!("optination: --remove needs a theme name");
+                return 2;
+            };
+            let saved = apply::saved().map(|(t, _)| t);
+            match store::remove(name, saved.as_deref()) {
+                Ok(path) => {
+                    println!("removed {}", path.display());
+                    0
+                }
+                Err(e) => {
+                    eprintln!("optination: {e}");
+                    1
+                }
+            }
         }
         "--list" => list(json),
         "--check" => check(size_or_current(rest)),
@@ -203,6 +248,100 @@ fn dispatch(flag: &str, rest: &[String], json: bool) -> i32 {
             eprintln!("optination: unknown option {other:?}\n");
             eprint!("{USAGE}");
             2
+        }
+    }
+}
+
+fn store_search(rest: &[String], json: bool) -> i32 {
+    let mut query = Vec::new();
+    let mut page = 0u32;
+    let mut sort = "downloads".to_string();
+    let mut args = rest.iter();
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--page" => match args.next().and_then(|p| p.parse().ok()) {
+                Some(p) if p < 1000 => page = p,
+                _ => {
+                    eprintln!("optination: --page needs a number");
+                    return 2;
+                }
+            },
+            "--sort" => match args.next() {
+                Some(s) => sort = s.clone(),
+                None => {
+                    eprintln!("optination: --sort needs downloads, rating, new or name");
+                    return 2;
+                }
+            },
+            word => query.push(word.to_string()),
+        }
+    }
+    let result = match store::search(&query.join(" "), page, &sort) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("optination: {e}");
+            return 1;
+        }
+    };
+    if json {
+        return print_json(&result);
+    }
+    let stdout = std::io::stdout();
+    let mut out = stdout.lock();
+    for item in &result.items {
+        let mark = if item.installed.is_empty() { "" } else { "  (installed)" };
+        let files: Vec<String> = item.files.iter().filter(|f| f.installable).map(|f| format!("{}:{}", f.n, f.name)).collect();
+        let line = format!(
+            "{:>8}  {:<36} {:>9} dl  {}{mark}\n{:>10}{}",
+            item.id,
+            item.name,
+            item.downloads,
+            item.author,
+            "",
+            if files.is_empty() { "no Linux archive".into() } else { files.join("  ") }
+        );
+        if writeln!(out, "{line}").is_err() {
+            return 0;
+        }
+    }
+    let shown = (result.page + 1) * result.page_size;
+    let _ = writeln!(
+        out,
+        "page {} · {} of {} themes{}",
+        result.page,
+        result.items.len(),
+        result.total,
+        if u64::from(shown) < result.total { " · --page N for more" } else { "" }
+    );
+    0
+}
+
+fn install(rest: &[String], json: bool) -> i32 {
+    let Some(id) = rest.first().and_then(|s| s.parse::<u64>().ok()) else {
+        eprintln!("optination: --install needs a catalog id (see --store)");
+        return 2;
+    };
+    let file = match rest.get(1).map(|s| s.parse::<u32>()) {
+        None => None,
+        Some(Ok(n)) => Some(n),
+        Some(Err(_)) => {
+            eprintln!("optination: the file number must be a number");
+            return 2;
+        }
+    };
+    match store::install(id, file) {
+        Ok(done) => {
+            if json {
+                return print_json(&done);
+            }
+            for name in &done.installed {
+                println!("installed {name}");
+            }
+            0
+        }
+        Err(e) => {
+            eprintln!("optination: {e}");
+            1
         }
     }
 }
