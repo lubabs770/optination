@@ -293,6 +293,7 @@ Item {
             font.family: store.ui.font
             font.pixelSize: 13
             clip: true
+            readOnly: !activeFocus
             maximumLength: 100
             text: store.query
             onTextEdited: {

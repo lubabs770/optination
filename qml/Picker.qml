@@ -859,6 +859,7 @@ Item {
                 font.family: root.font
                 font.pixelSize: 13
                 clip: true
+                readOnly: !activeFocus
                 text: root.query
                 onTextEdited: root.query = text
                 Accessible.name: "Search cursor themes"
