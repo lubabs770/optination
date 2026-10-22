@@ -115,6 +115,15 @@ fn parse_sizes(meta: &str) -> Vec<SizeEntry> {
     out
 }
 
+const HLC_META_LIMIT: u64 = 64 * 1024;
+const HLC_ASSET_LIMIT: u64 = 4 * 1024 * 1024;
+
+fn capped_read(r: &mut impl Read, limit: u64) -> Option<Vec<u8>> {
+    let mut buf = Vec::new();
+    r.take(limit + 1).read_to_end(&mut buf).ok()?;
+    (buf.len() as u64 <= limit).then_some(buf)
+}
+
 /// Choose the best asset for a shape out of its `.hlc` (a zip of `meta.hl` plus
 /// assets).
 ///
@@ -127,16 +136,15 @@ fn hlc_asset(hlc: &Path, target: u32) -> Option<Asset> {
 
     let mut wanted: Option<String> = None;
     if let Ok(mut meta) = zip.by_name("meta.hl") {
-        let mut text = String::new();
-        if meta.read_to_string(&mut text).is_ok() {
-            let sizes = parse_sizes(&text);
-            wanted = sizes
-                .iter()
-                .find(|e| e.size == 0)
-                .or_else(|| sizes.iter().filter(|e| e.size >= target).min_by_key(|e| e.size))
-                .or_else(|| sizes.iter().max_by_key(|e| e.size))
-                .map(|e| e.file.clone());
-        }
+        let raw = capped_read(&mut meta, HLC_META_LIMIT)?;
+        let text = String::from_utf8(raw).ok()?;
+        let sizes = parse_sizes(&text);
+        wanted = sizes
+            .iter()
+            .find(|e| e.size == 0)
+            .or_else(|| sizes.iter().filter(|e| e.size >= target).min_by_key(|e| e.size))
+            .or_else(|| sizes.iter().max_by_key(|e| e.size))
+            .map(|e| e.file.clone());
     }
 
     // No parsable meta: fall back to whatever asset the archive holds.
@@ -148,8 +156,7 @@ fn hlc_asset(hlc: &Path, target: u32) -> Option<Asset> {
     };
 
     let mut entry = zip.by_name(&name).ok()?;
-    let mut buf = Vec::new();
-    entry.read_to_end(&mut buf).ok()?;
+    let buf = capped_read(&mut entry, HLC_ASSET_LIMIT)?;
     match () {
         _ if name.ends_with(".svg") => Some(Asset::Svg(buf)),
         _ if name.ends_with(".png") => Some(Asset::Png(buf)),
@@ -248,4 +255,56 @@ pub fn shape_count(theme: &Theme) -> usize {
         _ => theme.path.join("cursors"),
     };
     std::fs::read_dir(dir).map(|d| d.flatten().count()).unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_dir(tag: &str) -> std::path::PathBuf {
+        let p = std::env::temp_dir().join(format!("optination-render-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&p);
+        std::fs::create_dir_all(&p).unwrap();
+        p
+    }
+
+    fn write_hlc(dir: &Path, name: &str, meta: &[u8], asset_name: &str, asset: &[u8]) {
+        std::fs::create_dir_all(dir.join("hyprcursors")).unwrap();
+        let path = dir.join("hyprcursors").join(format!("{name}.hlc"));
+        let file = std::fs::File::create(&path).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        zip.start_file::<_, ()>("meta.hl", Default::default()).unwrap();
+        std::io::Write::write_all(&mut zip, meta).unwrap();
+        zip.start_file::<_, ()>(asset_name, Default::default()).unwrap();
+        std::io::Write::write_all(&mut zip, asset).unwrap();
+        zip.finish().unwrap();
+    }
+
+    #[test]
+    fn hlc_rejects_oversized_asset() {
+        let dir = test_dir("big-asset");
+        let big = vec![0u8; HLC_ASSET_LIMIT as usize + 1];
+        write_hlc(&dir, "left_ptr", b"define_size = 0, bomb.png\n", "bomb.png", &big);
+        assert!(hlc_asset(&dir.join("hyprcursors/left_ptr.hlc"), 24).is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn hlc_rejects_oversized_meta() {
+        let dir = test_dir("big-meta");
+        let big_meta = vec![b'#'; HLC_META_LIMIT as usize + 1];
+        write_hlc(&dir, "left_ptr", &big_meta, "cursor.svg", b"<svg/>");
+        assert!(hlc_asset(&dir.join("hyprcursors/left_ptr.hlc"), 24).is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn hlc_accepts_normal_asset() {
+        let dir = test_dir("normal");
+        let svg = b"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\"/>";
+        write_hlc(&dir, "left_ptr", b"define_size = 0, cursor.svg\n", "cursor.svg", svg);
+        let asset = hlc_asset(&dir.join("hyprcursors/left_ptr.hlc"), 24);
+        assert!(matches!(asset, Some(Asset::Svg(_))));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
