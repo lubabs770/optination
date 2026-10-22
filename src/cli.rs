@@ -10,7 +10,7 @@ use std::path::PathBuf;
 
 use serde::Serialize;
 
-use crate::{apply, cache, render, scan, store};
+use crate::{apply, cache, preview, render, scan, store};
 
 const USAGE: &str = "\
 optination — pick a cursor theme, with previews
@@ -33,9 +33,11 @@ USAGE:
                                         default: the first Linux archive) into
                                         ~/.local/share/icons
     optination --remove <THEME>         delete a theme installed under your home
+    optination --previews <URL>...      fetch catalog preview pictures into the cache,
+                                        checked and shrunk to a safe size
 
     --json   machine-readable output for --list, --current, --render, --thumbs,
-             --stale, --store, --install
+             --stale, --store, --install, --previews
 
 Sizes default to the current cursor size.
 ";
@@ -174,6 +176,7 @@ fn dispatch(flag: &str, rest: &[String], json: bool) -> i32 {
         }
         "--store" => store_search(rest, json),
         "--install" => install(rest, json),
+        "--previews" => previews(rest, json),
         "--remove" => {
             let Some(name) = rest.first() else {
                 eprintln!("optination: --remove needs a theme name");
@@ -344,6 +347,48 @@ fn install(rest: &[String], json: bool) -> i32 {
             1
         }
     }
+}
+
+#[derive(Serialize)]
+struct PreviewJson<'a> {
+    url: &'a str,
+    /// The cached PNG, or None when the picture could not be shown.
+    path: Option<PathBuf>,
+    error: Option<String>,
+}
+
+fn previews(rest: &[String], json: bool) -> i32 {
+    if rest.is_empty() {
+        eprintln!("optination: --previews needs one or more catalog picture URLs");
+        return 2;
+    }
+    if rest.len() > preview::MAX_URLS {
+        eprintln!("optination: at most {} pictures at a time", preview::MAX_URLS);
+        return 2;
+    }
+    let results = preview::fetch_all(rest);
+    if json {
+        let rows: Vec<PreviewJson> = rest
+            .iter()
+            .zip(results)
+            .map(|(url, r)| match r {
+                Ok(path) => PreviewJson { url, path: Some(path), error: None },
+                Err(e) => PreviewJson { url, path: None, error: Some(e) },
+            })
+            .collect();
+        return print_json(&rows);
+    }
+    let mut failed = false;
+    for (url, r) in rest.iter().zip(results) {
+        match r {
+            Ok(path) => println!("{}", path.display()),
+            Err(e) => {
+                failed = true;
+                eprintln!("optination: {url}: {e}");
+            }
+        }
+    }
+    i32::from(failed)
 }
 
 fn list(json: bool) -> i32 {

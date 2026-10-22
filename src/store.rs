@@ -18,6 +18,9 @@
 //!   inside the theme;
 //! * the theme name must pass the same check `--save` applies, so whatever is
 //!   installed can also be saved.
+//!
+//! Preview pictures are untrusted too; `preview` fetches and re-encodes them
+//! so the overlay never decodes one straight off the network.
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -95,7 +98,7 @@ pub struct Installed {
 
 // ------------------------------------------------------------------ fetch ---
 
-fn curl(url: &str, max_bytes: u64, timeout_s: u32, out: Option<&Path>) -> Result<Vec<u8>, String> {
+pub(crate) fn curl(url: &str, max_bytes: u64, timeout_s: u32, out: Option<&Path>) -> Result<Vec<u8>, String> {
     let mut cmd = Command::new("curl");
     // `-q` must come first: it stops ~/.curlrc from changing any of the below.
     cmd.args(["-q", "-fsSL", "--proto", "=https", "--proto-redir", "=https", "--max-redirs", "5"])
@@ -197,13 +200,16 @@ fn text(v: &Value, max: usize) -> String {
 }
 
 /// Preview pictures are only ever taken from pling's image host.
-fn preview_url(v: &Value) -> Option<String> {
-    let s = v.as_str()?;
-    let ok = s.starts_with("https://images.pling.com/")
+pub(crate) fn allowed_preview(s: &str) -> bool {
+    s.starts_with("https://images.pling.com/")
         && s.len() < 512
         && s.bytes().all(|b| b.is_ascii_graphic())
-        && !s.contains("..");
-    ok.then(|| s.to_string())
+        && !s.contains("..")
+}
+
+fn preview_url(v: &Value) -> Option<String> {
+    let s = v.as_str()?;
+    allowed_preview(s).then(|| s.to_string())
 }
 
 pub fn installable_name(name: &str) -> bool {

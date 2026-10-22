@@ -25,6 +25,13 @@ Item {
   property string error: ""
   // "id:n" of the download in flight.
   property string installing: ""
+  // Catalog picture URL → cached PNG path ("" when it could not be shown).
+  // Pictures are never loaded from the network here: the engine fetches,
+  // checks and shrinks them (`--previews`), and only its PNG is shown.
+  property var shots: ({})
+  property var shotQueue: []
+  // URLs already queued or fetched, so none is asked for twice.
+  property var shotAsked: ({})
 
   readonly property var item: current >= 0 && current < items.length ? items[current] : null
   readonly property var installable: item ? item.files.filter(f => f.installable) : []
@@ -64,6 +71,8 @@ Item {
 
   function select(i) {
     if (i < 0 || i >= items.length) return
+    // Ask first: the placeholder reads the queue when `current` changes.
+    wantPreviews(items[i].previews, true)
     current = i
     shot = 0
     results.positionViewAtIndex(i, ListView.Contain)
@@ -124,10 +133,40 @@ Item {
     return n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? Math.round(n / 1e3) + "k" : String(n)
   }
 
-  // Only pling's own image host, over https, becomes an image source.
+  // Only pling's own image host, over https, is ever handed to the engine.
   function imageUrl(u) {
     return typeof u === "string" && u.startsWith("https://images.pling.com/") && u.length < 512
       && !/[\s"'<>\\]/.test(u) ? u : ""
+  }
+
+  // Queue pictures for the engine; `first` puts them ahead of the rest.
+  function wantPreviews(urls, first) {
+    const fresh = urls.map(imageUrl).filter(u => u && !shotAsked[u])
+    if (!fresh.length) return
+    for (const u of fresh) shotAsked[u] = true
+    shotQueue = first ? fresh.concat(shotQueue) : shotQueue.concat(fresh)
+    if (!previewProc.running) nextPreviews()
+  }
+
+  function nextPreviews() {
+    if (!ui.engine || !shotQueue.length) return
+    // Small batches, so pictures appear as they arrive.
+    previewProc.batch = shotQueue.slice(0, 8)
+    shotQueue = shotQueue.slice(8)
+    previewProc.command = [ui.engine, "--previews"].concat(previewProc.batch, ["--json"])
+    previewProc.running = true
+  }
+
+  // Asked for, and the engine has not answered yet.
+  function previewPending(u) {
+    const url = imageUrl(u)
+    return url !== "" && shotAsked[url] === true && !(url in shots)
+  }
+
+  // The local file for a catalog picture, once the engine has made it.
+  function previewSource(u) {
+    const path = shots[imageUrl(u)]
+    return path ? ui.fileUrl(path) : ""
   }
 
   function isItem(it) {
@@ -152,6 +191,7 @@ Item {
         store.items = store.appending ? store.items.concat(rows) : rows
         store.loaded = true
         if (!store.appending) store.select(rows.length ? 0 : -1)
+        store.wantPreviews(rows.filter(r => r.previews.length).map(r => r.previews[0]), false)
       }
     }
     stderr: StdioCollector {
@@ -187,6 +227,23 @@ Item {
         return copy
       })
       store.ui.tryInstalled(names[0])
+    }
+  }
+
+  Process {
+    id: previewProc
+    property var batch: []
+    stdout: StdioCollector { id: previewOut }
+    onExited: {
+      const rows = store.ui.parse(previewOut.text, [], store.ui.maxSmallBytes)
+      const next = Object.assign({}, store.shots)
+      for (const u of batch) next[u] = ""
+      for (const r of rows) {
+        if (r && typeof r.url === "string" && batch.includes(r.url) && typeof r.path === "string")
+          next[r.url] = r.path
+      }
+      store.shots = next
+      store.nextPreviews()
     }
   }
 
@@ -359,7 +416,7 @@ Item {
               Image {
                 anchors.fill: parent
                 anchors.margins: 1
-                source: store.imageUrl(hit.modelData.previews[0])
+                source: store.previewSource(hit.modelData.previews[0])
                 fillMode: Image.PreserveAspectCrop
                 sourceSize.width: 160
                 asynchronous: true
@@ -467,7 +524,7 @@ Item {
           id: shotImage
           anchors.fill: parent
           anchors.margins: 12
-          source: store.item ? store.imageUrl(store.item.previews[store.shot]) : ""
+          source: store.item ? store.previewSource(store.item.previews[store.shot]) : ""
           fillMode: Image.PreserveAspectFit
           asynchronous: true
           smooth: true
@@ -478,7 +535,8 @@ Item {
           anchors.centerIn: parent
           visible: shotImage.status !== Image.Ready
           text: !store.item ? (storeProc.running ? "searching the catalog…" : "")
-            : shotImage.status === Image.Loading ? "loading preview…"
+            : shotImage.status === Image.Loading || store.previewPending(store.item.previews[store.shot])
+              ? "loading preview…"
             : "no preview picture"
           color: store.ui.tokens.muted
           font.family: store.ui.font

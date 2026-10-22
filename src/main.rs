@@ -12,6 +12,7 @@ mod apply;
 mod cache;
 mod cli;
 mod launch;
+mod preview;
 mod render;
 mod scan;
 mod store;

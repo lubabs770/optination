@@ -168,6 +168,14 @@ Installing handles untrusted archives, so it is strict:
 - an existing theme of the same name is never overwritten unless optination
   installed it (it leaves `.optination-source.json` in the themes it installs).
 
+Preview pictures are untrusted too, and the overlay runs inside the desktop
+shell, so the shell never loads one from the network. The engine fetches each
+through the same `curl` limits (10 MB), refuses anything larger than
+4096 × 4096 *before* decoding it, decodes it with Rust decoders that have a
+memory cap, skips PNG text and colour-profile chunks, shrinks it to at most
+800 × 600, and writes a fresh PNG to `~/.cache/optination/.store-previews/`.
+That small local file is all the shell ever decodes.
+
 Cursor themes are data — Xcursor images, SVGs, PNGs and an `index.theme` —
 and optination only ever reads them. What you install is still third-party
 content from the catalog, which optination does not vet; the browse tab is
@@ -289,10 +297,12 @@ optination --store [QUERY] [--page N] [--sort downloads|rating|new|name]
                                     search the online catalog
 optination --install <ID> [FILE]    install catalog item ID (default: its recommended file)
 optination --remove <THEME>         delete a theme installed under your home
+optination --previews <URL>...      fetch catalog preview pictures, checked and shrunk
 ```
 
 `--current` prints what is live and what is saved. Add `--json` to `--list`,
-`--current`, `--render`, `--thumbs`, `--stale`, `--store` or `--install` for
+`--current`, `--render`, `--thumbs`, `--stale`, `--store`, `--install` or
+`--previews` for
 the machine format the overlay reads.
 
 `--check` reports gaps in the *themes*, not in optination — a theme with no
