@@ -64,9 +64,7 @@ impl Tone {
 /// conventions that actually appear; anything else stays unstated.
 fn tone_of(name: &str) -> Tone {
     let name = name.to_lowercase();
-    let has = |needle: &str| {
-        name.split(|c: char| !c.is_ascii_alphanumeric()).any(|word| word == needle)
-    };
+    let has = |needle: &str| name.split(|c: char| !c.is_ascii_alphanumeric()).any(|word| word == needle);
     if has("dark") {
         Tone::Dark
     } else if has("light") || has("white") {
@@ -120,10 +118,7 @@ fn search_dirs() -> Vec<(PathBuf, bool)> {
 /// Checking only for the former drops real themes — `sweet-cursors-hyprcursor`
 /// ships TOML.
 fn manifest(dir: &Path) -> Option<PathBuf> {
-    ["manifest.hl", "manifest.toml"]
-        .iter()
-        .map(|f| dir.join(f))
-        .find(|p| p.is_file())
+    ["manifest.hl", "manifest.toml"].iter().map(|f| dir.join(f)).find(|p| p.is_file())
 }
 
 pub fn classify(dir: &Path) -> Option<Format> {
@@ -155,11 +150,8 @@ fn read_field(path: &Path, keys: &[&str]) -> Option<String> {
 
 fn describe(dir: &Path, format: Format) -> String {
     let from_index = read_field(&dir.join("index.theme"), &["Comment"]);
-    let from_manifest = if format.has_hypr() {
-        manifest(dir).and_then(|m| read_field(&m, &["description"]))
-    } else {
-        None
-    };
+    let from_manifest =
+        if format.has_hypr() { manifest(dir).and_then(|m| read_field(&m, &["description"])) } else { None };
     from_index.or(from_manifest).unwrap_or_default()
 }
 

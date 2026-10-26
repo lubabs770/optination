@@ -15,20 +15,13 @@ const BEGIN: &str = "-- >>> optination (managed block) >>>";
 const END: &str = "-- <<< optination (managed block) <<<";
 
 fn run(program: &str, args: &[&str]) -> Result<(), String> {
-    let out = Command::new(program)
-        .args(args)
-        .output()
-        .map_err(|e| format!("{program}: {e}"))?;
+    let out = Command::new(program).args(args).output().map_err(|e| format!("{program}: {e}"))?;
     if out.status.success() {
         return Ok(());
     }
     let msg = String::from_utf8_lossy(&out.stderr);
     let msg = msg.trim();
-    Err(format!(
-        "{program} {}: {}",
-        args.join(" "),
-        if msg.is_empty() { "failed" } else { msg }
-    ))
+    Err(format!("{program} {}: {}", args.join(" "), if msg.is_empty() { "failed" } else { msg }))
 }
 
 /// Live: Hyprland's pointer changes on the next frame.
@@ -45,10 +38,8 @@ pub fn session(theme: &str, size: u32) -> Result<(), String> {
 
 pub fn current() -> (Option<String>, Option<u32>) {
     let get = |key: &str| -> Option<String> {
-        let out = Command::new("gsettings")
-            .args(["get", "org.gnome.desktop.interface", key])
-            .output()
-            .ok()?;
+        let out =
+            Command::new("gsettings").args(["get", "org.gnome.desktop.interface", key]).output().ok()?;
         if !out.status.success() {
             return None;
         }
@@ -78,9 +69,9 @@ pub fn safe_name(name: &str) -> bool {
         && name.len() <= 255
         && !name.starts_with(['.', '-', ' '])
         && !name.ends_with(' ')
-        && name.bytes().all(|b| {
-            b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'+' | b'@' | b' ')
-        })
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'+' | b'@' | b' '))
 }
 
 /// Encode `s` as a double-quoted Lua string literal. Everything but printable
@@ -210,9 +201,7 @@ pub fn saved() -> Option<(String, u32)> {
 pub fn stale_conf() -> Option<PathBuf> {
     let path = dirs::home_dir()?.join(".config/hypr/hyprland.conf");
     let text = std::fs::read_to_string(&path).ok()?;
-    text.lines()
-        .any(|l| l.contains("XCURSOR_THEME") || l.contains("XCURSOR_SIZE"))
-        .then_some(path)
+    text.lines().any(|l| l.contains("XCURSOR_THEME") || l.contains("XCURSOR_SIZE")).then_some(path)
 }
 
 #[cfg(test)]
@@ -293,7 +282,8 @@ mod tests {
     #[test]
     fn saved_reads_back_what_managed_block_writes() {
         let path = std::env::temp_dir().join(format!("optination-saved-{}.lua", std::process::id()));
-        std::fs::write(&path, format!("-- mine\n{}-- after\n", managed_block("Bibata-Modern-Ice", 30))).unwrap();
+        std::fs::write(&path, format!("-- mine\n{}-- after\n", managed_block("Bibata-Modern-Ice", 30)))
+            .unwrap();
         // SAFETY: tests touching this variable run in this one test only.
         unsafe { std::env::set_var("OPTINATION_LOOKNFEEL", &path) };
         assert_eq!(saved(), Some(("Bibata-Modern-Ice".into(), 30)));

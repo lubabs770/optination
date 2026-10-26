@@ -35,9 +35,7 @@ fn omarchy_plugin_enabled() -> bool {
 /// Where install.sh puts the QML; `OPTINATION_QML` points at a checkout instead.
 fn qml_dir() -> PathBuf {
     std::env::var_os("OPTINATION_QML").map(PathBuf::from).unwrap_or_else(|| {
-        dirs::data_dir()
-            .unwrap_or_else(|| PathBuf::from("/usr/share"))
-            .join("optination/qml")
+        dirs::data_dir().unwrap_or_else(|| PathBuf::from("/usr/share")).join("optination/qml")
     })
 }
 

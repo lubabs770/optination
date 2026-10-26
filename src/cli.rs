@@ -131,20 +131,14 @@ pub fn run() -> Option<i32> {
 }
 
 fn size_or_current(rest: &[String]) -> u32 {
-    rest.first()
-        .and_then(|s| s.parse().ok())
-        .or_else(|| apply::current().1)
-        .unwrap_or(24)
+    rest.first().and_then(|s| s.parse().ok()).or_else(|| apply::current().1).unwrap_or(24)
 }
 
 fn resolve(name: &str) -> Result<scan::Theme, i32> {
-    scan::themes()
-        .into_iter()
-        .find(|t| t.name.eq_ignore_ascii_case(name))
-        .ok_or_else(|| {
-            eprintln!("optination: no cursor theme named {name:?} (try --list)");
-            1
-        })
+    scan::themes().into_iter().find(|t| t.name.eq_ignore_ascii_case(name)).ok_or_else(|| {
+        eprintln!("optination: no cursor theme named {name:?} (try --list)");
+        1
+    })
 }
 
 fn dispatch(flag: &str, rest: &[String], json: bool) -> i32 {
@@ -170,7 +164,9 @@ fn dispatch(flag: &str, rest: &[String], json: bool) -> i32 {
             );
             match saved {
                 Some(s) => println!("saved: {} {}", s.theme, s.size),
-                None => println!("saved: nothing (no optination block in {})", apply::config_path().display()),
+                None => {
+                    println!("saved: nothing (no optination block in {})", apply::config_path().display())
+                }
             }
             0
         }
@@ -223,11 +219,8 @@ fn dispatch(flag: &str, rest: &[String], json: bool) -> i32 {
         "--thumbs" => {
             let themes = scan::themes();
             let paths = cache::thumbs(&themes);
-            let thumbs: Vec<ThumbJson> = themes
-                .iter()
-                .zip(paths)
-                .map(|(t, path)| ThumbJson { name: &t.name, path })
-                .collect();
+            let thumbs: Vec<ThumbJson> =
+                themes.iter().zip(paths).map(|(t, path)| ThumbJson { name: &t.name, path }).collect();
             if json {
                 return print_json(&thumbs);
             }
@@ -293,7 +286,8 @@ fn store_search(rest: &[String], json: bool) -> i32 {
     let mut out = stdout.lock();
     for item in &result.items {
         let mark = if item.installed.is_empty() { "" } else { "  (installed)" };
-        let files: Vec<String> = item.files.iter().filter(|f| f.installable).map(|f| format!("{}:{}", f.n, f.name)).collect();
+        let files: Vec<String> =
+            item.files.iter().filter(|f| f.installable).map(|f| format!("{}:{}", f.n, f.name)).collect();
         let line = format!(
             "{:>8}  {:<36} {:>9} dl  {}{mark}\n{:>10}{}",
             item.id,
