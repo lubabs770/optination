@@ -56,13 +56,55 @@ fn bgra_to_rgba(src: &[u8]) -> Vec<u8> {
     out
 }
 
+/// Big animated themes (Bibata's `watch` at every size up to 256) run a few
+/// MiB; anything past this is not a cursor.
+const XCURSOR_FILE_LIMIT: u64 = 32 * 1024 * 1024;
+
+/// Walk the TOC before handing the file to `xcursor`, which trusts it: it
+/// reserves `ntoc` slots up front, allocates `4 × width × height` from each
+/// image header before reading, and copies an image once per TOC entry that
+/// points at it. Requiring the declared pixels of all entries to fit in the
+/// file bounds every one of those to the file's own size.
+fn xcursor_sane(bytes: &[u8]) -> bool {
+    let u32_at = |at: usize| -> Option<u64> {
+        Some(u64::from(u32::from_le_bytes(bytes.get(at..at + 4)?.try_into().ok()?)))
+    };
+    let (Some(header), Some(ntoc)) = (u32_at(4), u32_at(12)) else {
+        return false;
+    };
+    let len = bytes.len() as u64;
+    if header + ntoc * 12 > len {
+        return false;
+    }
+    let mut pixels: u64 = 0;
+    for i in 0..ntoc {
+        let toc = (header + i * 12) as usize;
+        if u32_at(toc) != Some(0xfffd_0002) {
+            continue;
+        }
+        let Some(pos) = u32_at(toc + 8) else { return false };
+        let (Some(w), Some(h)) = (u32_at(pos as usize + 16), u32_at(pos as usize + 20)) else {
+            return false;
+        };
+        pixels += 4 * w.min(0x8000) * h.min(0x8000);
+        if pixels > len {
+            return false;
+        }
+    }
+    true
+}
+
 fn load_xcursor(theme_dir: &Path, names: &[&str], target: u32) -> Option<Bitmap> {
     let cursors = theme_dir.join("cursors");
     for name in names {
         let file = cursors.join(name);
-        let Ok(bytes) = std::fs::read(&file) else {
+        let Ok(mut f) = std::fs::File::open(&file) else {
             continue;
         };
+        let bytes = capped_read(&mut f, XCURSOR_FILE_LIMIT)?;
+        if !xcursor_sane(&bytes) {
+            return None;
+        }
         let images = xcursor::parser::parse_xcursor(&bytes)?;
         // Prefer the smallest nominal size that is >= target so we scale down,
         // never up; fall back to the largest available.
@@ -117,6 +159,10 @@ fn parse_sizes(meta: &str) -> Vec<SizeEntry> {
 
 const HLC_META_LIMIT: u64 = 64 * 1024;
 const HLC_ASSET_LIMIT: u64 = 4 * 1024 * 1024;
+/// A compressed PNG declares its own dimensions, and the output buffer is ours
+/// to allocate, so `png::Limits` does not cover it. Cursor PNGs top out at 256
+/// in practice; this leaves headroom for HiDPI themes.
+const HLC_PNG_MAX_SIDE: u32 = 1024;
 
 fn capped_read(r: &mut impl Read, limit: u64) -> Option<Vec<u8>> {
     let mut buf = Vec::new();
@@ -177,8 +223,13 @@ fn render_svg(svg: &[u8], target: u32) -> Option<Bitmap> {
 }
 
 fn decode_png(data: &[u8]) -> Option<Bitmap> {
-    let decoder = png::Decoder::new(std::io::Cursor::new(data));
+    let limits = png::Limits { bytes: 16 * 1024 * 1024 };
+    let decoder = png::Decoder::new_with_limits(std::io::Cursor::new(data), limits);
     let mut reader = decoder.read_info().ok()?;
+    let (w, h) = (reader.info().width, reader.info().height);
+    if w > HLC_PNG_MAX_SIDE || h > HLC_PNG_MAX_SIDE {
+        return None;
+    }
     let mut buf = vec![0; reader.output_buffer_size()?];
     let info = reader.next_frame(&mut buf).ok()?;
     buf.truncate(info.buffer_size());
@@ -292,6 +343,57 @@ mod tests {
         write_hlc(&dir, "left_ptr", &big_meta, "cursor.svg", b"<svg/>");
         assert!(hlc_asset(&dir.join("hyprcursors/left_ptr.hlc"), 24).is_none());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn png_bytes(w: u32, h: u32) -> Vec<u8> {
+        let mut out = Vec::new();
+        let mut enc = png::Encoder::new(&mut out, w, h);
+        enc.set_color(png::ColorType::Rgba);
+        enc.set_depth(png::BitDepth::Eight);
+        enc.write_header().unwrap().write_image_data(&vec![0; (w * h * 4) as usize]).unwrap();
+        out
+    }
+
+    #[test]
+    fn png_rejects_oversized_dimensions() {
+        assert!(decode_png(&png_bytes(HLC_PNG_MAX_SIDE + 1, 1)).is_none());
+        assert!(decode_png(&png_bytes(32, 32)).is_some());
+    }
+
+    /// An Xcursor file whose `ntoc` TOC entries all point at one `side`² image.
+    fn xcursor_bytes(ntoc: u32, side: u32) -> Vec<u8> {
+        let mut b = Vec::new();
+        let header = 16u32;
+        let image = header + ntoc * 12;
+        for v in [u32::from_le_bytes(*b"Xcur"), header, 0x1_0000, ntoc] {
+            b.extend_from_slice(&v.to_le_bytes());
+        }
+        for _ in 0..ntoc {
+            for v in [0xfffd_0002, side, image] {
+                b.extend_from_slice(&v.to_le_bytes());
+            }
+        }
+        for v in [36, 0xfffd_0002, side, 1, side, side, 0, 0, 0] {
+            b.extend_from_slice(&u32::to_le_bytes(v));
+        }
+        b.extend(std::iter::repeat_n(0u8, (side * side * 4) as usize));
+        b
+    }
+
+    #[test]
+    fn xcursor_rejects_repeated_toc_entries() {
+        let ok = xcursor_bytes(1, 24);
+        assert!(xcursor_sane(&ok));
+        assert_eq!(xcursor::parser::parse_xcursor(&ok).map(|v| v.len()), Some(1));
+        assert!(!xcursor_sane(&xcursor_bytes(1000, 24)));
+    }
+
+    #[test]
+    fn xcursor_rejects_inflated_header() {
+        let mut b = xcursor_bytes(1, 24);
+        let at = 16 + 12 + 16; // image width
+        b[at..at + 8].copy_from_slice(&[0xff, 0x7f, 0, 0, 0xff, 0x7f, 0, 0]);
+        assert!(!xcursor_sane(&b));
     }
 
     #[test]
