@@ -44,9 +44,8 @@ const MAX_ENTRIES: usize = 40_000;
 /// Marks a theme directory as installed from the catalog, and from which item.
 pub const SOURCE_FILE: &str = ".optination-source.json";
 
-const ARCHIVES: &[&str] = &[
-    ".tar.gz", ".tgz", ".tar.xz", ".txz", ".tar.bz2", ".tbz2", ".tar.zst", ".tar", ".zip", ".7z",
-];
+const ARCHIVES: &[&str] =
+    &[".tar.gz", ".tgz", ".tar.xz", ".txz", ".tar.bz2", ".tbz2", ".tar.zst", ".tar", ".zip", ".7z"];
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -182,7 +181,10 @@ fn api(url: &str) -> Result<Value, String> {
         .map_err(|_| "the catalog sent something optination could not read".to_string())?;
     if value["statuscode"].as_u64() != Some(100) {
         let msg = value["message"].as_str().unwrap_or("");
-        return Err(format!("the catalog refused the request{}", if msg.is_empty() { String::new() } else { format!(": {msg}") }));
+        return Err(format!(
+            "the catalog refused the request{}",
+            if msg.is_empty() { String::new() } else { format!(": {msg}") }
+        ));
     }
     Ok(value)
 }
@@ -288,7 +290,8 @@ fn item(raw: &Value, themes: &[(String, Option<Source>)]) -> Option<Item> {
     for f in files.iter_mut().filter(|f| f.installable) {
         let stem = stem(&f.name);
         if let Some((name, _)) = themes.iter().find(|(name, source)| {
-            source.as_ref().is_some_and(|s| s.id == id && s.file == f.name) || name.to_ascii_lowercase() == stem
+            source.as_ref().is_some_and(|s| s.id == id && s.file == f.name)
+                || name.to_ascii_lowercase() == stem
         }) {
             f.installed_as = name.clone();
         }
@@ -301,10 +304,8 @@ fn item(raw: &Value, themes: &[(String, Option<Source>)]) -> Option<Item> {
         })
         .map(|(name, _)| name.clone())
         .collect();
-    let previews = ["previewpic1", "previewpic2", "previewpic3"]
-        .iter()
-        .filter_map(|k| preview_url(&raw[*k]))
-        .collect();
+    let previews =
+        ["previewpic1", "previewpic2", "previewpic3"].iter().filter_map(|k| preview_url(&raw[*k])).collect();
     Some(Item {
         id,
         name: text(&raw["name"], 120),
@@ -351,10 +352,10 @@ pub fn sort_mode(sort: &str) -> Option<&'static str> {
 }
 
 pub fn search(query: &str, page: u32, sort: &str) -> Result<Page, String> {
-    let mode = sort_mode(sort).ok_or_else(|| format!("unknown sort {sort:?} (downloads, rating, new, name)"))?;
-    let mut url = format!(
-        "{API}?format=json&categories={CATEGORY}&pagesize={PAGE_SIZE}&page={page}&sortmode={mode}"
-    );
+    let mode =
+        sort_mode(sort).ok_or_else(|| format!("unknown sort {sort:?} (downloads, rating, new, name)"))?;
+    let mut url =
+        format!("{API}?format=json&categories={CATEGORY}&pagesize={PAGE_SIZE}&page={page}&sortmode={mode}");
     let query = query.trim();
     if !query.is_empty() {
         url.push_str("&search=");
@@ -399,12 +400,10 @@ fn md5_hex(path: &Path) -> Result<String, String> {
 
 /// Count entries and total size from `bsdtar -tv` before unpacking anything.
 fn check_listing(archive: &Path) -> Result<(), String> {
-    let out = Command::new("bsdtar")
-        .arg("-tvf")
-        .arg(archive)
-        .stdin(Stdio::null())
-        .output()
-        .map_err(|e| match e.kind() {
+    let out =
+        Command::new("bsdtar").arg("-tvf").arg(archive).stdin(Stdio::null()).output().map_err(|e| match e
+            .kind()
+        {
             std::io::ErrorKind::NotFound => "installing needs bsdtar (pacman -S libarchive)".to_string(),
             _ => format!("bsdtar: {e}"),
         })?;
@@ -591,7 +590,8 @@ pub fn install(id: u64, n: Option<u32>) -> Result<Installed, String> {
     let entries = files(raw);
     let file = match n {
         Some(n) => entries.iter().find(|f| f.n == n).ok_or_else(|| format!("item {id} has no file {n}"))?,
-        None => default_file(&entries).ok_or_else(|| "this item has no Linux cursor archive to install".to_string())?,
+        None => default_file(&entries)
+            .ok_or_else(|| "this item has no Linux cursor archive to install".to_string())?,
     };
     if !file.installable {
         return Err(format!("{} is not a Linux cursor archive", file.name));

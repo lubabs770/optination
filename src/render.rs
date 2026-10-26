@@ -172,11 +172,7 @@ fn render_svg(svg: &[u8], target: u32) -> Option<Bitmap> {
     let h = (size.height() * scale).ceil().max(1.0) as u32;
 
     let mut pixmap = resvg::tiny_skia::Pixmap::new(w, h)?;
-    resvg::render(
-        &tree,
-        resvg::tiny_skia::Transform::from_scale(scale, scale),
-        &mut pixmap.as_mut(),
-    );
+    resvg::render(&tree, resvg::tiny_skia::Transform::from_scale(scale, scale), &mut pixmap.as_mut());
     Some(Bitmap { width: w, height: h, rgba: pixmap.take(), premultiplied: true })
 }
 

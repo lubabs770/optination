@@ -94,7 +94,9 @@ fn decode_png(bytes: &[u8]) -> Result<Rgba, String> {
     let pixels = match out.color_type {
         png::ColorType::Rgba => buf,
         png::ColorType::Rgb => buf.as_chunks::<3>().0.iter().flat_map(|&[r, g, b]| [r, g, b, 255]).collect(),
-        png::ColorType::GrayscaleAlpha => buf.as_chunks::<2>().0.iter().flat_map(|&[g, a]| [g, g, g, a]).collect(),
+        png::ColorType::GrayscaleAlpha => {
+            buf.as_chunks::<2>().0.iter().flat_map(|&[g, a]| [g, g, g, a]).collect()
+        }
         png::ColorType::Grayscale => buf.iter().flat_map(|&g| [g, g, g, 255]).collect(),
         png::ColorType::Indexed => return Err("png: palette was not expanded".into()),
     };

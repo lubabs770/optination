@@ -20,9 +20,7 @@ use crate::scan::Theme;
 pub const THUMB_PX: u32 = 64;
 
 fn root() -> PathBuf {
-    dirs::cache_dir()
-        .unwrap_or_else(std::env::temp_dir)
-        .join("optination")
+    dirs::cache_dir().unwrap_or_else(std::env::temp_dir).join("optination")
 }
 
 /// Theme names are directory names, so they are already path-safe in practice;
@@ -118,9 +116,7 @@ pub fn preview(theme: &Theme, size: u32) -> Vec<Option<PathBuf>> {
         .enumerate()
         .map(|(i, slot)| {
             let target = preview_target(i, size);
-            cached(theme, dir.join(format!("{}.png", slot.label)), || {
-                render::shape(theme, slot, target)
-            })
+            cached(theme, dir.join(format!("{}.png", slot.label)), || render::shape(theme, slot, target))
         })
         .collect()
 }
